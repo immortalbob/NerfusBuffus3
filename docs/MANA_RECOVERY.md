@@ -16,6 +16,10 @@ vital gets spent:
   **more-depleted** one first, so both pools stay balanced and both loops keep contributing.
 - **Optional consumables** (both off by default, opt-in): the right potion for the depleted vital,
   or a healing kit — see *Auto-scanned consumables* below.
+- **Health→Mana is optional:** the Cannibalize / Heal-Self half is on by default but can be turned
+  off (Options → **Use Cannibalize (health to mana)**, or `/nbset cannibalize 0`) for a
+  **stamina-only** recovery that never spends health — mana then comes solely from S2M, and the only
+  vital it restores is stamina (Revitalize). Steps 2 and the health-restore below are skipped.
 
 Every recovery cast is guarded by an **affordability check** (it won't attempt a cast the character
 can't pay for) and by the **percentage floors** (it won't drain a vital below its floor to make
@@ -42,9 +46,10 @@ checked mana and cast every buff until mana hit 0. Making `SpellRecovery` the de
 Verified against the corpus spell data: the EoR spell table lists **`Cannibalize` (id 2332 =
 `0x091C`)** in the **same family/word (`puishzhafeth`) as `Health to Mana Self`**, and
 `nb3-spells.xml` maps `Health to Mana Self` level 7 to `0x091C`. So Cannibalize *is* H2M at max
-level. The spell mode uses your best known H2M level; tick **Use H2M7** in Options to specifically
-cast the spell named Cannibalize (it falls back to level 6 if you don't know 7). Same idea for
-**Use S2M7 / Use Revit7**.
+level. The spell mode uses your best known H2M level at or below the **Max level** setting, so
+setting Max level to 7 casts the spell named Cannibalize when you know it (and automatically falls
+back to level 6, then 5, … if you don't). The same single Max-level cap governs S2M, Revitalize
+and Heal Self.
 
 ## Auto-scanned consumables (potions, food, kits — per vital)
 
@@ -65,24 +70,37 @@ name-fragment match (the doc-19 §5 ladder) is the fallback if the properties ca
 
 ## Options & chat controls
 
-Options panel (**NB3 Options**):
+Options panel (**NB3 Options**) — the window now surfaces every everyday knob, grouped:
 
-- **Mana Regeneration Mode** dropdown — option 6, *"Spells: S2M + Cannibalize + Revitalize"*, the
-  default selection.
-- **Use potions as optional fallback** checkbox (off by default). Healing kits are the other
-  optional fallback, gated by the **Healing Kits** tier checkboxes.
-- **Min cast chance %** — the *"buffs you're barely able to reach"* threshold (`MinCastChancePercent`,
-  default 90); see [`SKILL_BASED_LEVEL.md`](SKILL_BASED_LEVEL.md).
+- **Mana Regeneration** — the *Mana Regeneration Mode* dropdown (option 6, *"Spells: S2M +
+  Cannibalize + Revitalize"*, the default), **Use Healing Kits**, **Use potions as optional
+  fallback**, and **Use Cannibalize (health to mana)** (on by default — clear it for stamina-only
+  recovery). Kits/potions are off by default; there's no per-tier kit choice (the scan auto-selects
+  the best kit you carry).
+- **Recovery thresholds** — *Regen when mana below %* (`manafloor`) and *Regen mana up to %*
+  (`manatarget`) set the regen band; *Stamina floor %* and *Health floor %* are the source-vital
+  floors; *Max recovery level (1-7)* is the one cap for every recovery spell (it walks down to the
+  best known level below the cap), replacing the old per-spell level-7 toggles.
+- **Buffing** — *Expected % of Spell Cost*, *Skill-based buff level cap*, *Min cast chance %* (the
+  *"buffs you're barely able to reach"* threshold, default 90; see
+  [`SKILL_BASED_LEVEL.md`](SKILL_BASED_LEVEL.md)), *Recast buffs already active*, and *Rebuff if
+  under N min left*.
+- **Misc** — *Auto-generate profile at login*, quiet mode, editor perma-delete. Plus a **Rescan
+  Character** button that rebuilds this character's profile from its current trained/specialized
+  skills, in place.
 
-Chat (`/nbset`):
+Chat (`/nbset`) — the recovery-relevant keys (see the README for the complete list, including the
+advanced timing knobs that are chat-only):
 
 ```
 regen 0-6      6 = Spells: S2M + Cannibalize + Revitalize (default)
+kits 0/1       allow healing kits as a fallback (best carried is auto-selected)
 potions 0/1    allow a mana potion as a last-resort fallback (default 0)
+cannibalize 0/1  allow Health->Mana (Cannibalize) + Heal Self (default 1); 0 = stamina-only recovery
+maxrec 1-7     recovery-spell level cap for H2M/S2M/Revit/Heal (7 = level-7 H2M is 'Cannibalize')
 stampct <1-99> restore stamina below this % of max (default 50)
 healthpct <1-99> heal / H2M-floor below this % of max (default 50)
 manafloor <0-99> / manatarget <1-100>   regen band (defaults 25 / 90)
-s2m7 | h2m7 (= Cannibalize) | revit7 | fallback6   recovery-spell levels
 ```
 
 ## Migrating an existing character

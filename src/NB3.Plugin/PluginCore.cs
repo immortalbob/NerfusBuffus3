@@ -62,9 +62,9 @@ namespace NB3.Plugin
         private RecoverySpells _recovery;
         private bool _regenWarned;                // one chat notice per cycle, not per tick
         private int _regenCastFailures;           // comps-missing/timed-out recovery casts
-        private const int MaxRegenCastFailures = 5; // then BACK OFF the cadence (not give up)
+        private int _maxRegenCastFailures = 5;    // then BACK OFF the cadence (not give up); NB3Settings-backed
         private int _lastRegenCastTick;           // for the post-streak retry backoff
-        private const int RegenRetryBackoffMs = 3000; // after the streak, retry recovery this often
+        private int _regenRetryBackoffMs = 3000;  // after the streak, retry recovery this often; NB3Settings-backed
 
         // /nbdebug instrumentation (doc 18 §7's two open measurements: cast timing and the
         // StatusMessage type catalog). Off by default; writes nb3-debug.txt when on.
@@ -75,7 +75,7 @@ namespace NB3.Plugin
         // Min gap after a cast RESOLVES before the next is issued. AC drops a cast fired into
         // post-cast recovery (nb3-debug: a cast begun 9 ms after the previous landed was dropped
         // and timed out). Combined with the BusyState==0 gate, this spaces casts past recovery.
-        private const int CastSettleMs = 500;
+        private int _castSettleMs = 500;          // NB3Settings-backed (_castSettleMs)
 
         // Portal-space gate (doc 13 §10.3). TRUE at startup: login itself ends with an ExitPortal.
         private bool _inPortalSpace = true;
@@ -97,6 +97,25 @@ namespace NB3.Plugin
             new System.Collections.Generic.Dictionary<string, string>(); // write labels only on change
         private string _currentProfileName;       // shown in staticCurrentConfig
         private int _cycleStartedAt;              // Environment.TickCount at /nbuff, for the m:ss label
+
+        // ---- level bootstrap (the buff-level re-check across passes) ----------------------
+        // A single /nbuff can span several cycles: the initial buff, then upgrade passes that recast
+        // buffs at a higher level once the casting-stat buffs (Focus/Willpower/Creature Enchantment)
+        // have raised the skill that caps them. _activeProfile is the resolved profile we re-plan
+        // each pass; _bootstrapPass counts cycles launched this run; the _run* tallies accumulate
+        // across passes so the completion line reports the whole run, not just the last pass.
+        private NB3.Core.Modern.ModernProfile _activeProfile;
+        private int _bootstrapPass;
+        private bool _phaseForceAll;              // the initial cycle's recast policy (from the run's 'force'/RecastActiveBuffs)
+        private int _phasePrefixCount;            // >0 => the initial cycle casts only this many leading (casting-stat) buffs
+        private int _runCast, _runFizzle, _runResist, _runTimeout, _runSkipped, _runBusy;
+        private const int BootstrapMaxCycles = 8; // hard cap: 1 initial + up to 7 upgrade passes (≈3-4 in practice)
+        // Highest spell level (ACE Power) already cast per stacking category THIS run. An upgrade pass
+        // recasts a category only when it can now go STRICTLY higher than this — so a buff the coverage
+        // check can't re-match (some auras/banes/item casts create an enchantment the stacking read
+        // misses) is cast once in the initial buff and never re-cast, instead of every pass to the cap.
+        private readonly System.Collections.Generic.Dictionary<int, int> _castLevelByCat =
+            new System.Collections.Generic.Dictionary<int, int>();
 
         // ---- login auto-onboard (character-named profile, auto-selected) -----------------
         // On LoginComplete we generate a self-buff profile named after the character (if one
@@ -473,7 +492,7 @@ namespace NB3.Plugin
                 // lift the gate. Any success resets the streak.
                 if (outcome == CastOutcome.Success)
                     _regenCastFailures = 0;
-                else if (++_regenCastFailures == MaxRegenCastFailures)
+                else if (++_regenCastFailures == _maxRegenCastFailures)
                     WarnRegenOnce("recovery casts keep failing - slowing the retry cadence but STILL trying (natural regen will let one land).");
             }
         }
@@ -566,7 +585,7 @@ namespace NB3.Plugin
                         // §10.4, the "ready" signal) AND a short settle after the last cast landed,
                         // so we don't depend solely on BusyState covering the recovery tail.
                         if (!_state.ClientIdle ||
-                            unchecked(Environment.TickCount - _lastCastResolvedTick) < CastSettleMs)
+                            unchecked(Environment.TickCount - _lastCastResolvedTick) < _castSettleMs)
                         {
                             if (_debug) DebugLog($"  cast deferred: {(_state.ClientIdle ? "settle" : "client busy")} (since resolve {unchecked(Environment.TickCount - _lastCastResolvedTick)} ms)");
                             break;
@@ -584,14 +603,19 @@ namespace NB3.Plugin
                     case StepKind.RegenMana:      RunManaRegen(step); break;
                     case StepKind.Paused:         break;
                     case StepKind.Done:
-                        _timer.Stop();
                         OrphanPendingCast();
+                        // Fold this cycle's tallies into the run totals — a run spans the initial buff
+                        // plus any level-up passes — then try to advance to the next pass.
+                        _runCast += _cycle.SpellsCast; _runFizzle += _cycle.Fizzles; _runResist += _cycle.Resists;
+                        _runTimeout += _cycle.Timeouts; _runSkipped += _cycle.Skipped; _runBusy += _cycle.BusyHits;
+                        if (AdvanceBuffPhase()) break;    // a level-up pass is running; keep the timer going
+                        _timer.Stop();
                         int csecs = Math.Max(0, unchecked(Environment.TickCount - _cycleStartedAt)) / 1000;
                         // The original: "Buff cycle completed in %u:%02i." + BuffComplete.wav.
-                        Say($"Buff cycle completed in {csecs / 60}:{csecs % 60:00}. " +
-                            $"{_cycle.SpellsCast} cast, {_cycle.Fizzles} fizzle(s), " +
-                            $"{_cycle.Resists} resist(s), {_cycle.Timeouts} timeout(s), " +
-                            $"{_cycle.Skipped} skipped, {_cycle.BusyHits} busy.");
+                        Say($"Buff cycle completed in {csecs / 60}:{csecs % 60:00}"
+                            + (_bootstrapPass > 1 ? $" over {_bootstrapPass} passes" : "") + ". "
+                            + $"{_runCast} cast, {_runFizzle} fizzle(s), {_runResist} resist(s), "
+                            + $"{_runTimeout} timeout(s), {_runSkipped} skipped, {_runBusy} busy.");
                         PlayBuffComplete();
                         HideCastingView();
                         _cycle = null;
@@ -629,8 +653,11 @@ namespace NB3.Plugin
                 Potions = _settings != null && _settings.UsePotions,
                 Kits = _settings != null && _settings.HealingKits != HealingKitTiers.None,
             };
+            // Health->mana (Cannibalize/H2M, and the Heal Self that sustains it) is on unless the
+            // player turned it off for a stamina-only recovery that never touches health.
+            bool allowHp2Mana = _settings == null || _settings.UseHealthToMana;
             var controller = new ManaRegenController(
-                step.RegenMode, _recovery ?? new RecoverySpells(), step.RequiredMana, thresholds, consumables);
+                step.RegenMode, _recovery ?? new RecoverySpells(), step.RequiredMana, thresholds, consumables, allowHp2Mana);
             var action = controller.Next(_state);
 
             switch (action.Kind)
@@ -672,14 +699,14 @@ namespace NB3.Plugin
                     // full 10 s watchdog — the "healing takes forever to start the next spell" report.
                     // Gate on BusyState==0 AND the settle window after the last cast landed.
                     if (!_state.ClientIdle ||
-                        unchecked(Environment.TickCount - _lastCastResolvedTick) < CastSettleMs)
+                        unchecked(Environment.TickCount - _lastCastResolvedTick) < _castSettleMs)
                         break;
                     // Keep trying recovery casts — never abandon the mode and strand the cycle on
                     // slow natural regen (the owner's report). After a failure streak, only throttle
                     // the cadence: natural regen trickles up between tries, so a later attempt lands
                     // once there's enough mana for one cast. Any success resets the streak (ResolveCast).
-                    if (_regenCastFailures >= MaxRegenCastFailures
-                        && unchecked(Environment.TickCount - _lastRegenCastTick) < RegenRetryBackoffMs)
+                    if (_regenCastFailures >= _maxRegenCastFailures
+                        && unchecked(Environment.TickCount - _lastRegenCastTick) < _regenRetryBackoffMs)
                         break;   // throttled this tick, not abandoned — retry after the backoff
                     // S2M/H2M/Revit are self-casts: the target argument is ignored for
                     // untargetted spells (doc 18 §1), so 0 is correct and unambiguous.
@@ -889,7 +916,10 @@ namespace NB3.Plugin
                 return;
             }
 
-            var plan = _planner.Plan(profile, _state, skillPolicy, rebuff);
+            // Auto-wield a caster at Start if the hand is empty (owner request; default on) — so the
+            // cycle can enter the Magic stance and land its casts even if you forgot to wield a wand.
+            bool autoWield = _settings == null || _settings.AutoWieldCaster;
+            var plan = _planner.Plan(profile, _state, skillPolicy, rebuff, autoWield);
 
             // Empty plan? Say WHY, truthfully — read from the plan, don't assume "already buffed".
             if (plan.Actions.Count == 0)
@@ -921,15 +951,176 @@ namespace NB3.Plugin
             else
                 foreach (var w in plan.Warnings) Say(w.Message);
 
-            _cycle = new BuffCycle(plan, _cycleOptions);
-            _cycle.Start();
+            // Set up the run and launch its first cycle. With the level bootstrap on and the profile
+            // carrying the Creature Enchantment checkpoint, the first cycle casts only the casting-stat
+            // prefix; AdvanceBuffPhase then re-plans the rest at the now-higher skill and keeps
+            // upgrading until nothing improves. Otherwise it's a single cycle over the whole profile.
+            _activeProfile = profile;
+            _bootstrapPass = 0;
+            _phaseForceAll = recastAll;
+            _phasePrefixCount = (_settings != null && _settings.BootstrapLevels && _settings.SkillBasedLevel)
+                ? profile.CastingStatPrefixCount() : 0;
+            _runCast = _runFizzle = _runResist = _runTimeout = _runSkipped = _runBusy = 0;
+            _castLevelByCat.Clear();
             _cycleStartedAt = Environment.TickCount;
             _currentProfileName = profile.Name;
-            _lastCastResolvedTick = unchecked(Environment.TickCount - CastSettleMs); // no recovery to wait for at a fresh start
-            _timer.Start();
-            Say($"Buffing '{profile.Name}': {_cycle.TotalSpells} spell(s), {_cycle.TotalEquips} equip(s).");
-            ShowCastingView();                 // the original opened "NB3 Spells" for the cycle
+
+            int wantSpells = 0;
+            foreach (var a in plan.Actions) if (a.Kind != CastKind.Equip) wantSpells++;
+            if (!AdvanceBuffPhase())
+            {
+                Say($"'{profile.Name}' — already buffed at the levels your skill allows. /nbuff {seedName} force to recast.");
+                return;
+            }
+            Say($"Buffing '{profile.Name}': {wantSpells} spell(s)"
+                + (_phasePrefixCount > 0 && _phasePrefixCount < profile.Buffs.Count
+                   ? " — casting stats first, then leveling up as your skill climbs" : "") + ".");
             UpdateStatusView();
+        }
+
+        /// <summary>Launch a cycle over <paramref name="plan"/> on the shared timer, showing the
+        /// casting view. Used for both the initial buff and each subsequent level-up pass.</summary>
+        private void LaunchCycle(NB3.Core.BuffPlan plan)
+        {
+            _cycle = new NB3.Core.BuffCycle(plan, _cycleOptions);
+            _cycle.Start();
+            _lastCastResolvedTick = unchecked(Environment.TickCount - _castSettleMs); // nothing to settle at a fresh cycle
+            _timer.Start();                    // idempotent when already running (the upgrade passes)
+            ShowCastingView();
+        }
+
+        /// <summary>A shallow copy of <paramref name="full"/> holding only its first
+        /// <paramref name="count"/> buffs (plus every equip, so the auto-wield still fires). The
+        /// casting-stat prefix the bootstrap casts before re-planning the rest at the raised skill.</summary>
+        private static NB3.Core.Modern.ModernProfile PrefixProfile(NB3.Core.Modern.ModernProfile full, int count)
+        {
+            var p = new NB3.Core.Modern.ModernProfile { Name = full.Name, Version = full.Version };
+            foreach (var eq in full.EquipItems) p.EquipItems.Add(eq);
+            for (int i = 0; i < count && i < full.Buffs.Count; i++) p.Buffs.Add(full.Buffs[i]);
+            return p;
+        }
+
+        /// <summary>A shallow copy of <paramref name="full"/> holding the buffs AFTER the first
+        /// <paramref name="skip"/> — the rest of the profile, cast in pass 1 of a split run once the
+        /// casting-stat prefix has raised the skill. No equips (the prefix pass already wielded).</summary>
+        private static NB3.Core.Modern.ModernProfile RestProfile(NB3.Core.Modern.ModernProfile full, int skip)
+        {
+            var p = new NB3.Core.Modern.ModernProfile { Name = full.Name, Version = full.Version };
+            for (int i = skip; i < full.Buffs.Count; i++) p.Buffs.Add(full.Buffs[i]);
+            return p;
+        }
+
+        /// <summary>Plan and launch the next cycle of the current run, or return false when the run is
+        /// finished. The FIRST cycle (<see cref="_bootstrapPass"/> == 0) is the initial buff — the
+        /// casting-stat prefix when bootstrapping, else the whole profile — cast with the run's recast
+        /// policy. Every later cycle re-plans the WHOLE profile at the now-higher skill with
+        /// ForceAll OFF, so only genuine level-upgrades (a level-6 buff the raised skill now casts at
+        /// 7) and any not-yet-cast buff are recast; an already-max buff is left alone (the stacking
+        /// check). The loop ends when a re-plan yields nothing more to raise, or the pass cap is hit —
+        /// it always terminates because each pass strictly raises at least one active level, bounded
+        /// by the max spell level.</summary>
+        private bool AdvanceBuffPhase()
+        {
+            bool bootstrapping = _settings != null && _settings.BootstrapLevels && _settings.SkillBasedLevel;
+
+            while (true)
+            {
+                bool first = _bootstrapPass == 0;
+                if (!first && (!bootstrapping || _bootstrapPass >= BootstrapMaxCycles)) return false;
+
+                var skill = (_settings != null && _settings.SkillBasedLevel)
+                    ? new NB3.Core.Modern.SkillPolicy { Enabled = true, MinChancePercent = _settings.MinCastChancePercent }
+                    : null;
+
+                // The "initial buff" (which honours the run's recast policy — refresh the whole list)
+                // covers the entire profile: one cycle normally, or TWO when we split off the
+                // casting-stat prefix (pass 0 = prefix, pass 1 = the rest). Only AFTER that do the
+                // upgrade passes run with ForceAll OFF, so they recast just the genuine level-ups.
+                bool splitRun = _phasePrefixCount > 0 && _phasePrefixCount < _activeProfile.Buffs.Count;
+                bool isInitial = _bootstrapPass == 0 || (_bootstrapPass == 1 && splitRun);
+                var rebuff = new NB3.Core.Modern.RebuffPolicy { ForceAll = isInitial && _phaseForceAll, MinSecondsRemaining = 0 };
+                bool autoWield = first && (_settings == null || _settings.AutoWieldCaster);
+
+                // Split run: pass 0 casts only the casting-stat prefix, pass 1 casts only the REST
+                // (planned at the now-raised skill) — so a high-skill character never recasts the
+                // prefix a second time. The prefix's OWN level-ups (a capped Focus 6 -> 7) are caught
+                // by the ForceAll-off upgrade passes (pass 2+), which re-check the WHOLE profile.
+                NB3.Core.Modern.ModernProfile prof;
+                if (splitRun && _bootstrapPass == 0)      prof = PrefixProfile(_activeProfile, _phasePrefixCount);
+                else if (splitRun && _bootstrapPass == 1) prof = RestProfile(_activeProfile, _phasePrefixCount);
+                else                                      prof = _activeProfile;
+
+                _state.RefreshSpellBook();
+                var plan = _planner.Plan(prof, _state, skill, rebuff, autoWield);
+                int casts = 0;
+                foreach (var a in plan.Actions) if (a.Kind != NB3.Core.CastKind.Equip) casts++;
+
+                if (casts > 0)
+                {
+                    // The INITIAL buff (pass 0, and pass 1 of a split run) casts the whole plan. An
+                    // UPGRADE pass casts ONLY genuine level-ups — a category now castable STRICTLY
+                    // higher than it already got this run. Re-casting a buff at the same level it
+                    // already reached is pointless, and a cast whose enchantment the coverage check
+                    // can't re-match would otherwise re-appear in every re-plan and spin to the cap.
+                    if (!isInitial)
+                    {
+                        plan = GenuineUpgradesOnly(plan);
+                        casts = 0;
+                        foreach (var a in plan.Actions) if (a.Kind != NB3.Core.CastKind.Equip) casts++;
+                        if (casts == 0) return false;   // nothing can go higher -> the run is done
+                    }
+
+                    int passNo = _bootstrapPass;   // 0 = the initial buff (the prefix on a split run)
+                    _bootstrapPass++;
+                    RecordCastLevels(plan);        // remember what level each category was cast at
+                    LaunchCycle(plan);
+                    if (passNo == 1 && splitRun)
+                        Say($"...then the rest at your raised skill: {casts} spell(s).");
+                    else if (passNo > 0)
+                        Say($"Leveling up: {casts} buff(s) your raised skill can now cast higher.");
+                    return true;
+                }
+
+                // Nothing to cast this phase. If it was the prefix phase (already at max), fall through
+                // to the full re-plan for the rest; otherwise the run is done.
+                if (first && splitRun) { _bootstrapPass++; continue; }
+                return false;
+            }
+        }
+
+        /// <summary>A copy of <paramref name="plan"/> keeping only the casts that are a genuine
+        /// level-up — a stacking category not yet cast this run, or now castable at a STRICTLY higher
+        /// level (ACE Power) than <see cref="_castLevelByCat"/> records. Everything else (equips, and
+        /// buffs the re-plan re-proposes at the same level because their enchantment wasn't matched as
+        /// covered) is dropped, so an upgrade pass never re-casts a buff that already reached its level.</summary>
+        private NB3.Core.BuffPlan GenuineUpgradesOnly(NB3.Core.BuffPlan plan)
+        {
+            var filtered = new NB3.Core.BuffPlan();
+            foreach (var a in plan.Actions)
+            {
+                if (a.Kind == NB3.Core.CastKind.Equip) continue;      // no equips in an upgrade pass
+                var info = ResolveSpell(a.SpellId);
+                if (info == null) continue;                           // unresolvable level -> can't prove an upgrade, skip
+                int prior;
+                if (!_castLevelByCat.TryGetValue(info.Category, out prior) || info.Level > prior)
+                    filtered.Actions.Add(a);
+            }
+            return filtered;
+        }
+
+        /// <summary>Record the highest level (ACE Power) cast per stacking category, so a later
+        /// upgrade pass can tell a genuine level-up from a pointless re-cast.</summary>
+        private void RecordCastLevels(NB3.Core.BuffPlan plan)
+        {
+            foreach (var a in plan.Actions)
+            {
+                if (a.Kind == NB3.Core.CastKind.Equip) continue;
+                var info = ResolveSpell(a.SpellId);
+                if (info == null) continue;
+                int prior;
+                if (!_castLevelByCat.TryGetValue(info.Category, out prior) || info.Level > prior)
+                    _castLevelByCat[info.Category] = info.Level;
+            }
         }
 
         private void AbortCycle()
@@ -1161,8 +1352,9 @@ namespace NB3.Plugin
 
         /// <summary>/nbset [key value] — the Options that matter to the casting loop,
         /// settable from chat. Persists per character. Keys: regen 0-6 | aggr &lt;pct&gt; |
-        /// kits [p][t][e] | potions 0/1 | maxrec 1-7 | s2m7|h2m7|revit7|fallback6 0/1 | skillcap 0/1 |
-        /// mincast &lt;pct&gt; | recast 0/1 | rebuffmins &lt;n&gt; | healthpct 1-99 | stampct 1-99.</summary>
+        /// kits 0/1 | potions 0/1 | cannibalize 0/1 | maxrec 1-7 | skillcap 0/1 |
+        /// mincast &lt;pct&gt; | recast 0/1 | rebuffmins &lt;n&gt; | healthpct 1-99 | stampct 1-99 |
+        /// (advanced) maxattempts | casttimeout | castsettle | regenbackoff | maxregenfails.</summary>
         private void SetOption(string arg)
         {
             LoadCharacterConfigIfNeeded();
@@ -1174,10 +1366,10 @@ namespace NB3.Plugin
             {
                 Say($"regen={(int)_settings.ManaRegenMode} ({_settings.ManaRegenMode})  aggr={_settings.ExpectedPctSpellCost}%  " +
                     $"manafloor={_settings.ManaFloorPercent}%  manatarget={_settings.ManaRegenTargetPercent}%  " +
-                    $"kits={_settings.HealingKits}  potions={(_settings.UsePotions ? 1 : 0)}  maxrec={_settings.MaxRecoveryLevel}  healthpct={_settings.HealthFloorPercent}%  stampct={_settings.StaminaFloorPercent}%");
-                Say($"s2m7={(_settings.UseS2M7 ? 1 : 0)}  h2m7={(_settings.UseH2M7 ? 1 : 0)} (h2m7 = Cannibalize, level-7 H2M)  revit7={(_settings.UseRevit7 ? 1 : 0)}  fallback6={(_settings.FallbackTo6OnUnknown7 ? 1 : 0)}");
-                Say($"skillcap={(_settings.SkillBasedLevel ? 1 : 0)}  mincast={_settings.MinCastChancePercent}%  recast={(_settings.RecastActiveBuffs ? 1 : 0)}  rebuffmins={_settings.RebuffMinutesRemaining}  autogen={(_settings.AutoGenerateOnLogin ? 1 : 0)}  (recast 1 = always cast the whole list; recast 0 = skip active buffs)");
-                Say("Set: /nbset regen 0-6 | aggr <pct> | manafloor <0-99> | manatarget <1-100> | kits [p][t][e] | potions 0/1 | maxrec 1-7 | s2m7|h2m7|revit7|fallback6 0/1 | skillcap 0/1 | mincast <pct> | recast 0/1 | rebuffmins <n> | healthpct <1-99> | stampct <1-99> | autogen 0/1");
+                    $"kits={(_settings.HealingKits != HealingKitTiers.None ? 1 : 0)}  potions={(_settings.UsePotions ? 1 : 0)}  maxrec={_settings.MaxRecoveryLevel} (H2M/S2M/Revit/Heal)  healthpct={_settings.HealthFloorPercent}%  stampct={_settings.StaminaFloorPercent}%");
+                Say($"cannibalize={(_settings.UseHealthToMana ? 1 : 0)} (health->mana)  skillcap={(_settings.SkillBasedLevel ? 1 : 0)}  mincast={_settings.MinCastChancePercent}%  recast={(_settings.RecastActiveBuffs ? 1 : 0)}  rebuffmins={_settings.RebuffMinutesRemaining}  autogen={(_settings.AutoGenerateOnLogin ? 1 : 0)}  autowield={(_settings.AutoWieldCaster ? 1 : 0)}  bootstrap={(_settings.BootstrapLevels ? 1 : 0)}");
+                Say($"(advanced)  maxattempts={_settings.MaxAttemptsPerAction}  casttimeout={_settings.CastTimeoutMs}ms  castsettle={_settings.CastSettleMs}ms  regenbackoff={_settings.RegenRetryBackoffMs}ms  maxregenfails={_settings.MaxRegenCastFailures}");
+                Say("Set: /nbset regen 0-6 | aggr <pct> | manafloor <0-99> | manatarget <1-100> | kits 0/1 | potions 0/1 | cannibalize 0/1 | maxrec 1-7 | skillcap 0/1 | mincast <pct> | recast 0/1 | rebuffmins <n> | healthpct <1-99> | stampct <1-99> | autogen 0/1 | autowield 0/1 | bootstrap 0/1 | maxattempts <n> | casttimeout <ms> | castsettle <ms> | regenbackoff <ms> | maxregenfails <n>");
                 return;
             }
 
@@ -1199,19 +1391,17 @@ namespace NB3.Plugin
                     if (n <= _settings.ManaFloorPercent) { Say($"manatarget must be above manafloor ({_settings.ManaFloorPercent}%)."); return; }
                     _settings.ManaRegenTargetPercent = n; break;
                 case "kits":
-                    var kits = HealingKitTiers.None;
-                    var v = val.ToLowerInvariant();
-                    if (v.Contains("p")) kits |= HealingKitTiers.Plentiful;
-                    if (v.Contains("t")) kits |= HealingKitTiers.Treated;
-                    if (v.Contains("e")) kits |= HealingKitTiers.Peerless;
-                    _settings.HealingKits = kits; break;
+                    // Single on/off now — the inventory scan auto-picks the best kit carried, so
+                    // there's no per-tier choice. Accept "1"/"0" (and the old p/t/e letters = on).
+                    var kv = val.ToLowerInvariant();
+                    bool kitsOn = kv.Contains("1") || kv.Contains("p") || kv.Contains("t") || kv.Contains("e");
+                    _settings.HealingKits = kitsOn
+                        ? (HealingKitTiers.Plentiful | HealingKitTiers.Treated | HealingKitTiers.Peerless)
+                        : HealingKitTiers.None;
+                    Say(kitsOn ? "healing kits ON (best carried is auto-selected)." : "healing kits OFF."); break;
                 case "maxrec":
-                    if (n < 1 || n > 7) { Say("maxrec: 1-7 (max level for S2M/H2M/Revit)"); return; }
+                    if (n < 1 || n > 7) { Say("maxrec: 1-7 (max level for S2M / H2M / Revit / Heal Self)"); return; }
                     _settings.MaxRecoveryLevel = n; break;
-                case "s2m7":      _settings.UseS2M7 = n != 0; break;
-                case "h2m7":      _settings.UseH2M7 = n != 0; break;
-                case "revit7":    _settings.UseRevit7 = n != 0; break;
-                case "fallback6": _settings.FallbackTo6OnUnknown7 = n != 0; break;
                 case "skillcap":  _settings.SkillBasedLevel = n != 0;
                     Say(n != 0 ? "skill cap ON: buffs use the highest level you can land reliably." : "skill cap OFF: buffs use the highest level you know (may fizzle a lot)."); break;
                 case "mincast":
@@ -1223,6 +1413,12 @@ namespace NB3.Plugin
                 case "autogen":  _settings.AutoGenerateOnLogin = n != 0;
                     Say(n != 0 ? "autogen ON (default): on login, NB3 generates a profile named after your character (if none exists) and selects it in the main window."
                                : "autogen OFF: NB3 won't auto-create or auto-select a profile at login. Use /nbgen and the dropdown yourself."); break;
+                case "autowield":  _settings.AutoWieldCaster = n != 0;
+                    Say(n != 0 ? "autowield ON (default): at Start, if your casting hand is empty NB3 wields a wand/staff/orb from your pack so casts can land."
+                               : "autowield OFF: NB3 won't auto-wield a caster. Wield one yourself before buffing, or casts will fizzle."); break;
+                case "bootstrap":  _settings.BootstrapLevels = n != 0;
+                    Say(n != 0 ? "bootstrap ON (default): after your casting stats land, NB3 re-checks and recasts any buff your raised skill can now cast higher (a level-6 Focus refreshed to 7), cascading until nothing improves. Needs skillcap on."
+                               : "bootstrap OFF: buffs cast once at the level your skill allows at the start; no level-up re-check."); break;
                 case "rebuffmins":
                     if (n < 0 || n > 240) { Say("rebuffmins (only when recast=0): recast buffs with fewer than N minutes left (0 = skip all active)."); return; }
                     _settings.RebuffMinutesRemaining = n; break;
@@ -1236,6 +1432,26 @@ namespace NB3.Plugin
                     _settings.UsePotions = n != 0;
                     Say(n != 0 ? "potions ON: the spell-recovery mode may drink a mana elixir as a last-resort fallback."
                                : "potions OFF (default): spell-recovery uses spells only (S2M/Cannibalize/Revitalize)."); break;
+                case "cannibalize": case "health2mana":
+                    _settings.UseHealthToMana = n != 0;
+                    Say(n != 0 ? "health->mana ON (default): spell recovery may Cannibalize (H2M) and Heal Self."
+                               : "health->mana OFF: stamina-only recovery (S2M + Revitalize); health is never touched."); break;
+                // Advanced tuning (rarely needed; see /nbset list). All persist per character.
+                case "maxattempts":
+                    if (n < 0 || n > 99) { Say("maxattempts: give up on a spell after N fizzles/timeouts and skip it (0 = retry forever, default 8)."); return; }
+                    _settings.MaxAttemptsPerAction = n; break;
+                case "casttimeout":
+                    if (n < 1000 || n > 30000) { Say("casttimeout: per-cast watchdog in ms (1000-30000, default 10000). Raise on lag, lower on a fast server."); return; }
+                    _settings.CastTimeoutMs = n; break;
+                case "castsettle":
+                    if (n < 0 || n > 3000) { Say("castsettle: ms to wait after a cast resolves before the next (0-3000, default 500)."); return; }
+                    _settings.CastSettleMs = n; break;
+                case "regenbackoff":
+                    if (n < 250 || n > 30000) { Say("regenbackoff: after a recovery-cast failure streak, retry once per N ms (250-30000, default 3000)."); return; }
+                    _settings.RegenRetryBackoffMs = n; break;
+                case "maxregenfails":
+                    if (n < 1 || n > 99) { Say("maxregenfails: failed recovery casts in a row before the backoff engages (1-99, default 5)."); return; }
+                    _settings.MaxRegenCastFailures = n; break;
                 default: Say($"Unknown option '{key}'. /nbset for the list."); return;
             }
 
@@ -1270,10 +1486,18 @@ namespace NB3.Plugin
                 ManaFloorPercent = _settings.ManaFloorPercent,
                 ManaRegenTargetPercent = _settings.ManaRegenTargetPercent,
                 ManaRegenMode = _settings.ManaRegenMode,
+                MaxAttemptsPerAction = _settings.MaxAttemptsPerAction,
                 S2MSpellId = _recovery.StaminaToMana,
                 H2MSpellId = _recovery.HealthToMana,
                 RevitalizeSpellId = _recovery.Revitalize,
             };
+            // Settings-backed timing knobs (advanced): the cast watchdog, the post-cast settle, and
+            // the recovery-cast backoff, all tunable per character (fall back to the shipped defaults).
+            _monitor.TimeoutMs = _settings.CastTimeoutMs;
+            _monitor.PartialTimeoutMs = System.Math.Max(1, _settings.CastTimeoutMs / 2);
+            _castSettleMs = _settings.CastSettleMs;
+            _regenRetryBackoffMs = _settings.RegenRetryBackoffMs;
+            _maxRegenCastFailures = _settings.MaxRegenCastFailures;
             _regenWarned = false;
             _regenCastFailures = 0;
             _lastRegenCastTick = 0;

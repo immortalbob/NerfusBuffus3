@@ -63,6 +63,17 @@ namespace NB3.Core
         /// would UNequip it (double-click semantics).</summary>
         bool IsWielded(int guid);
 
+        /// <summary>The currently-wielded spellcasting implement — a wand / staff / orb / sceptre
+        /// (they all share the EquipMask "WandStaffOrb" / Focs slot, 0x01000000, reported in
+        /// CURRENT_WIELDED_LOCATION), or 0 if the casting hand is empty. Casting needs one, so the
+        /// cycle auto-wields one from the pack when this is 0.</summary>
+        int WieldedCasterId { get; }
+
+        /// <summary>A spellcasting implement CARRIED but not wielded — its VALID_LOCATIONS includes
+        /// the WandStaffOrb slot (0x01000000) and it isn't currently equipped — or 0 if none is
+        /// available. Used to auto-wield a caster at cycle start when the hand is empty.</summary>
+        int FindWieldableCaster();
+
         /// <summary>Spell ids of the player's currently-active enchantments (Decal 3:
         /// <c>CharacterFilter.Enchantments</c> → <c>SpellId</c>). The modern selector uses these
         /// to skip a stacking category that's already covered at an equal-or-higher level.</summary>

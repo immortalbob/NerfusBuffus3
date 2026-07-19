@@ -58,6 +58,23 @@ namespace NB3.Core.Modern
         /// <summary>Names of other profiles whose entries are merged in at plan time.</summary>
         public List<string> Includes { get; } = new List<string>();
 
+        /// <summary>The count of leading buffs that form the "casting-stat bootstrap" group — the
+        /// buffs from the front up to and INCLUDING the Creature Enchantment mastery
+        /// (<c>"Creature Magic Self"</c>). Those three (Focus, Willpower, Creature Enchantment) raise
+        /// the Creature Enchantment skill — and, via the Focus/Self attributes, every magic skill —
+        /// so once they land your skill is high enough to recast them (and everything after) a level
+        /// higher. The buff-level bootstrap casts these first, then re-checks. 0 when the profile has
+        /// no Creature Enchantment mastery entry (a hand-built profile without the checkpoint), which
+        /// disables the phased bootstrap for that profile (it falls back to a single pass).</summary>
+        public int CastingStatPrefixCount()
+        {
+            for (int i = 0; i < Buffs.Count; i++)
+                if (Buffs[i] != null &&
+                    string.Equals(Buffs[i].DisplayName, "Creature Magic Self", StringComparison.OrdinalIgnoreCase))
+                    return i + 1;
+            return 0;
+        }
+
         // ---- XML I/O -------------------------------------------------------------------
 
         public static ModernProfile Load(string path) => Parse(File.ReadAllText(path));

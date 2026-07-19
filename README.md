@@ -78,7 +78,9 @@ when you want to customize it.
 - **Editor** (`NB3 Editor`) — pick a profile or create one, then add buffs from the five tabs
   (Creature/Life × Self/Other, Item), Equip items, and Include other profiles. Each row in the
   profile has delete / move-up / move-down. New / Clear / Revert / Copy / Delete / Save.
-- **Options** (`NB3 Options`) — every per-character setting (below), saved on **Save**.
+- **Options** (`NB3 Options`) — every per-character setting (below), saved on **Save**. Its
+  **Rescan Character** button rebuilds your profile from your *current* trained/spec skills (the
+  `/nbgen` action), so you can refresh it after training new skills without deleting it and relogging.
 - **Spells** (`NB3 Spells`) — the live list of what the running cycle still has to do; opens at
   cycle start, closes when it finishes.
 
@@ -111,35 +113,51 @@ can't come up on your client.
 /nbhelp                           list the commands
 ```
 
-## Options (`/nbset`)
+## Options — the Options window and `/nbset`
 
-`/nbset` with no argument shows the current values; `/nbset <key> <value>` sets one. All options
-are per character and persist across sessions.
+Every setting is per character and persists across sessions. Open the **Options window**
+(`/nboptions`, or its Virindi-bar icon) to set them with checkboxes and boxes, or use `/nbset`
+from chat — no argument shows the current values, `/nbset <key> <value>` sets one. Both drive the
+same per-character config; the window groups the everyday knobs, and a handful of advanced timing
+settings are chat-only.
 
 ```
 regen 0-6      mana-regen mode:
                0 none · 1 Trade Mana Elixirs · 2 Stamina Elixirs + S2M · 3 Rest + S2M ·
                4 Healing Kits + H2M · 5 Revitalize + S2M ·
                6 Spells: S2M + Cannibalize + Revitalize   (the default; no consumables required)
-potions 0/1    (mode 6) allow a mana potion as a last-resort fallback (default 0 = spells only)
+kits 0/1        allow healing kits as a fallback; the best kit you carry is auto-selected
+potions 0/1     (mode 6) allow a mana potion as a last-resort fallback (default 0 = spells only)
+cannibalize 0/1 (mode 6) allow Health->Mana (Cannibalize) + Heal Self (default 1); 0 = stamina-only
+                recovery that never touches health
+manafloor 0-99     interrupt buffing to regen when mana drops below this % of max (default 25; 0 = off)
+manatarget 1-100   once regen starts, top mana back up to this % of max (default 90; above manafloor)
+stampct 1-99    (mode 6) restore stamina when it drops below this % of max, before S2M (default 50)
+healthpct 1-99  (mode 6) heal / H2M safety floor: keep health above this % of max (default 50)
+maxrec 1-7     max level for the recovery spells (H2M / S2M / Revitalize / Heal Self); it casts the
+               highest level you know at or below this, so 7 uses level-7 H2M ('Cannibalize') when known
 aggr <pct>     Expected % of Spell Cost — buff only while mana >= this % of the next spell's cost
-kits [p][t][e] which healing-kit tiers to use: p=Plentiful, t=Treated, e=Peerless (e.g. 'kits pt')
-maxrec 1-7     max level for the recovery spells (H2M / S2M / Revitalize / Heal Self)
-s2m7 0/1       use level-7 Stamina-to-Mana
-h2m7 0/1       use level-7 Health-to-Mana (level 7 is the spell named 'Cannibalize')
-revit7 0/1     use level-7 Revitalize
-fallback6 0/1  fall back to level 6 when a level-7 recovery spell is unknown
 skillcap 0/1   cast the highest level your skill can LAND reliably, not just the highest you know
 mincast <pct>  minimum cast-success chance for the skill cap (default 90)
-healthpct <n>  (mode 6) heal / H2M safety floor: keep health above n% of max (default 50)
-stampct <n>    (mode 6) restore stamina below n% of max, before S2M (default 50)
-rebuffmins <n> on a re-run, recast buffs with fewer than n minutes left (0 = skip all active buffs)
+bootstrap 0/1  (needs skillcap) after your casting stats land, re-check and recast any buff your
+               raised skill can now cast higher — a level-6 Focus refreshed to 7 — until nothing improves (default 1)
+recast 0/1     /nbuff recasts buffs already active (default 1); 0 = skip still-active buffs (mana-saving)
+rebuffmins <n> when recast=0, recast buffs with fewer than n minutes left (0 = skip all active buffs)
 autogen 0/1    at login, auto-generate a profile named after your character (if none exists yet)
                and select it in the main window (default 1 = on). See docs/AUTO_ONBOARD.md.
+autowield 0/1  at Start, wield a wand/staff/orb from your pack if your casting hand is empty
+               (default 1 = on) - you can't cast, or even enter Magic stance, without one
+
+advanced (chat only): maxattempts <n>  fizzles/timeouts before an action is skipped (default 8)
+                      casttimeout <ms>  per-cast watchdog before a retry (default 10000)
+                      castsettle <ms>   pause after a cast resolves, before the next (default 500)
+                      regenbackoff <ms> throttle after repeated recovery-cast failures (default 3000)
+                      maxregenfails <n> consecutive recovery-cast failures before that backoff (default 5)
 ```
 
-The recovery-mode knobs (`regen`, `potions`, `kits`, floors, level toggles) and how the default
-spell mode decides are documented in [`docs/MANA_RECOVERY.md`](docs/MANA_RECOVERY.md).
+The recovery-mode knobs (`regen`, `potions`, `kits`, `cannibalize`, the mana floor/target and the
+stamina/health floors) and how the default spell mode decides are documented in
+[`docs/MANA_RECOVERY.md`](docs/MANA_RECOVERY.md).
 
 ## How buffing works
 
@@ -153,6 +171,18 @@ spell mode decides are documented in [`docs/MANA_RECOVERY.md`](docs/MANA_RECOVER
   skill can't support. It promotes automatically as your skill grows. Tune with `/nbset skillcap`
   and `/nbset mincast` (also the *Min cast chance %* box in Options). See
   [`docs/SKILL_BASED_LEVEL.md`](docs/SKILL_BASED_LEVEL.md).
+
+- **Level bootstrap.** Your first buffs raise the very skill that decides how high you can cast:
+  Focus, Willpower and Creature Enchantment lift your Creature Enchantment skill (and, through the
+  Focus/Self attributes, every magic skill). So once those land, NB3 casts them first, then re-checks
+  the list at your now-higher skill and recasts anything that can go up a level — a Focus that landed
+  at 6 comes back up to 7 — and the bump cascades to the banes and protections through their masteries,
+  repeating until nothing improves. Needs the skill cap on; turn it off with `/nbset bootstrap 0`.
+
+- **Auto-wield a caster.** Press Start with an empty casting hand and NB3 wields a wand/staff/orb
+  from your pack first, so the run can enter Magic stance and its casts actually land. It picks the
+  first caster it finds and never disturbs one you're already holding; turn it off with
+  `/nbset autowield 0`. (A profile can still name a specific focus to equip in the Editor.)
 
 - **Mana & vital recovery.** By default NB3 keeps mana up with spells — Stamina→Mana, Cannibalize
   (Health→Mana), Revitalize (restore stamina) and Heal Self (restore health) — respecting per-vital

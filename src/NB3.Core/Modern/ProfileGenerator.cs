@@ -57,9 +57,10 @@ namespace NB3.Core.Modern
     /// training) come in as a delegate, so this is fully unit-tested off-client.
     ///
     /// Cast ORDER is load-bearing and fixed at the front (owner's spec): Focus → Willpower →
-    /// Creature Enchantment → Mana Conversion → Life Magic. Buffing the casting stats first means
-    /// every buff after them is checked/cast at the higher skill, so they land instead of fizzling.
-    /// After that prefix the order is immaterial and the set is grouped for readability.
+    /// Creature Enchantment → Mana Conversion → Item Enchantment → Hermetic Link → Life Magic.
+    /// Buffing the casting stats first means every buff after them is checked/cast at the higher
+    /// skill, so they land instead of fizzling. After that prefix the order is immaterial and the
+    /// set is grouped for readability.
     /// </summary>
     public static class ProfileGenerator
     {
@@ -75,14 +76,15 @@ namespace NB3.Core.Modern
             new GenBuff("Willpower Self",          BuffSchool.Creature, 0,  BuffGroup.Core),
             new GenBuff("Creature Magic Self",     BuffSchool.Creature, 31, BuffGroup.Core), // Creature Enchantment
             new GenBuff("Mana Conversion Self",    BuffSchool.Creature, 16, BuffGroup.Core),
+            new GenBuff("Item Magic Self",         BuffSchool.Creature, 32, BuffGroup.Core), // Item Enchantment mastery (owner: cast right after Mana Conversion)
+            new GenBuff("Hermetic Link",           BuffSchool.Item,     0,  BuffGroup.Core), // caster mana-leech aura (owner: cast right after Item Enchantment; benefits every archetype)
             new GenBuff("Life Magic Mastery Self", BuffSchool.Creature, 33, BuffGroup.Core),
             // ---- remaining attributes (universal, Creature) ----
             new GenBuff("Strength Self",           BuffSchool.Creature, 0,  BuffGroup.Core),
             new GenBuff("Endurance Self",          BuffSchool.Creature, 0,  BuffGroup.Core),
             new GenBuff("Coordination Self",       BuffSchool.Creature, 0,  BuffGroup.Core),
             new GenBuff("Quickness Self",          BuffSchool.Creature, 0,  BuffGroup.Core),
-            // ---- remaining magic-school masteries ----
-            new GenBuff("Item Magic Self",         BuffSchool.Creature, 32, BuffGroup.Core), // Item Enchantment
+            // ---- remaining magic-school mastery (Item Enchantment moved up into the prefix above) ----
             new GenBuff("War Magic Mastery Self",  BuffSchool.Creature, 34, BuffGroup.Core),
             // ---- the three defenses ----
             new GenBuff("Invulnerability Self",    BuffSchool.Creature, 6,  BuffGroup.Core), // Melee Defense
@@ -240,9 +242,9 @@ namespace NB3.Core.Modern
             if (melee)         AddAura(r, byName, seen, "Heart Seeker", "Heart Seeker");   // accuracy — melee only
             if (physical)      AddAura(r, byName, seen, "Defender", "Defender");           // weapon defence
             if (physical)      AddAura(r, byName, seen, "Swift Killer", "Swift Killer");   // attack speed
-            // Hermetic Link benefits every archetype (melee, missile, caster) — always include it
-            // (owner-confirmed), not just for casters. Item magic is already gated above.
-            AddAura(r, byName, seen, "Hermetic Link", "Hermetic Link");
+            // Hermetic Link is no longer added here — it moved up into the fixed prefix (right after
+            // Item Enchantment mastery, owner's spec) as a Core Item entry, so it's always included
+            // when Item magic is castable, regardless of archetype. See the Set above.
         }
 
         /// <summary>Add one aura, resolving its category through <paramref name="viaFamily"/> in the

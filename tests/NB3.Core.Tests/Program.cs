@@ -145,12 +145,18 @@ namespace NB3.Core.Tests
                 Eq(1, cyc.TotalEquips);
                 Eq(StepKind.Equip, cyc.Tick(s).Kind);
             });
-            Check("enters Magic mode before any cast", () =>
+            Check("equips run before Magic mode; no cast until Magic mode is entered", () =>
             {
+                // The Sample profile equips a Focusing Stone first. Not in Magic mode yet: the equip
+                // must run FIRST (you can't enter the Magic stance with an empty hand), then the
+                // EnterMagicMode gate holds until we're in mode, and only then does a cast issue.
                 var t = Table(); var s = AllKnown(); s.InMagicCombatMode = false;
                 s.ItemsByName["Focusing Stone"] = 0xAAAA;
                 var cyc = new BuffCycle(new BuffEngine(t).BuildPlan(Sample(), s)); cyc.Start();
-                Eq(StepKind.EnterMagicMode, cyc.Tick(s).Kind);
+                Eq(StepKind.Equip, cyc.Tick(s).Kind); cyc.ReportCastResult(true);   // wield first
+                Eq(StepKind.EnterMagicMode, cyc.Tick(s).Kind);                       // still out of mode -> gate holds
+                s.InMagicCombatMode = true;
+                Eq(StepKind.Cast, cyc.Tick(s).Kind);                                 // now it casts
             });
             Check("busy client yields a Busy step and bumps the counter", () =>
             {
@@ -265,23 +271,44 @@ namespace NB3.Core.Tests
                 {
                     CharacterId = 0x50001234,
                     HealingKits = HealingKitTiers.Treated | HealingKitTiers.Peerless,
-                    UseRevit7 = true, UseS2M7 = true, UseH2M7 = false, FallbackTo6OnUnknown7 = false,
+                    UsePotions = true,
                     ExpectedPctSpellCost = 85, ManaRegenMode = ManaRegenMode.RestS2M,
-                    MaxRecoveryLevel = 6, QuietMode = true, EditorPermaDelete = true,
+                    ManaFloorPercent = 30, ManaRegenTargetPercent = 85,
+                    MaxRecoveryLevel = 6, MinCastChancePercent = 80, QuietMode = true, EditorPermaDelete = true,
+                    SkillBasedLevel = false, RecastActiveBuffs = false, RebuffMinutesRemaining = 12,
                     HealthFloorPercent = 40, StaminaFloorPercent = 35,
-                    AutoGenerateOnLogin = false   // non-default, to prove it round-trips
+                    AutoGenerateOnLogin = false,   // non-default, to prove it round-trips
+                    AutoWieldCaster = false,       // non-default (default is true)
+                    BootstrapLevels = false,       // non-default (default is true)
+                    UseHealthToMana = false,       // non-default (default is true)
+                    MaxAttemptsPerAction = 3, CastTimeoutMs = 7500, CastSettleMs = 250,
+                    RegenRetryBackoffMs = 4000, MaxRegenCastFailures = 2
                 };
                 var s2 = NB3Settings.Parse(s.ToXml());
                 Eq(s.CharacterId, s2.CharacterId);
                 Eq(s.HealingKits, s2.HealingKits);
-                True(s2.UseRevit7 && s2.UseS2M7 && !s2.UseH2M7 && !s2.FallbackTo6OnUnknown7);
+                True(s2.UsePotions);
                 Eq(85, s2.ExpectedPctSpellCost);
                 Eq(ManaRegenMode.RestS2M, s2.ManaRegenMode);
+                Eq(30, s2.ManaFloorPercent);
+                Eq(85, s2.ManaRegenTargetPercent);
                 Eq(6, s2.MaxRecoveryLevel);
+                Eq(80, s2.MinCastChancePercent);
                 True(s2.QuietMode && s2.EditorPermaDelete);
+                True(!s2.SkillBasedLevel);
+                True(!s2.RecastActiveBuffs);
+                Eq(12, s2.RebuffMinutesRemaining);
                 Eq(40, s2.HealthFloorPercent);
                 Eq(35, s2.StaminaFloorPercent);
                 True(!s2.AutoGenerateOnLogin);
+                True(!s2.AutoWieldCaster);
+                True(!s2.BootstrapLevels);
+                True(!s2.UseHealthToMana);
+                Eq(3, s2.MaxAttemptsPerAction);
+                Eq(7500, s2.CastTimeoutMs);
+                Eq(250, s2.CastSettleMs);
+                Eq(4000, s2.RegenRetryBackoffMs);
+                Eq(2, s2.MaxRegenCastFailures);
             });
             Check("defaults are sane on empty config", () =>
             {
@@ -289,8 +316,19 @@ namespace NB3.Core.Tests
                 Eq(HealingKitTiers.None, s.HealingKits);
                 Eq(100, s.ExpectedPctSpellCost);
                 Eq(7, s.MaxRecoveryLevel);
-                True(s.FallbackTo6OnUnknown7);
+                Eq(ManaRegenMode.SpellRecovery, s.ManaRegenMode);   // default recovery = Spells
                 True(s.AutoGenerateOnLogin);   // onboarding on by default (opt-out via /nbset autogen 0)
+                True(s.AutoWieldCaster);       // auto-wield a caster at Start, on by default
+                True(s.BootstrapLevels);       // level bootstrap (re-check/upgrade capped buffs), on by default
+                // Advanced knobs now surfaced in the Options panel keep their documented defaults.
+                True(s.UseHealthToMana);            // health->mana (Cannibalize/Heal Self) on by default
+                Eq(25, s.ManaFloorPercent);
+                Eq(90, s.ManaRegenTargetPercent);
+                Eq(8, s.MaxAttemptsPerAction);
+                Eq(10000, s.CastTimeoutMs);
+                Eq(500, s.CastSettleMs);
+                Eq(3000, s.RegenRetryBackoffMs);
+                Eq(5, s.MaxRegenCastFailures);
             });
             Check("Load falls back to defaults on a corrupt/missing config (never throws)", () =>
             {
@@ -312,36 +350,36 @@ namespace NB3.Core.Tests
                 finally { try { File.Delete(tmp); } catch { } }
             });
 
-            Console.WriteLine("\nRecoverySpells (S2M/H2M/Revit level selection):");
-            Check("resolves highest known recovery spells", () =>
+            Console.WriteLine("\nRecoverySpells (highest known S2M/H2M/Revit/Heal at or below the max level):");
+            Check("resolves the highest known level for all four recovery spells", () =>
             {
                 var t = Table(); var s = AllKnown();
-                var rec = RecoverySpells.Resolve(t, s.SpellKnown, new NB3Settings { UseS2M7 = true, UseH2M7 = true, UseRevit7 = true });
+                var rec = RecoverySpells.Resolve(t, s.SpellKnown, new NB3Settings()); // default max = 7
                 Eq(t.ByEditorName("Stamina to Mana Self").IdAtLevel(7), rec.StaminaToMana);
-                Eq(t.ByEditorName("Health to Mana Self").IdAtLevel(7), rec.HealthToMana);
+                Eq(t.ByEditorName("Health to Mana Self").IdAtLevel(7), rec.HealthToMana); // L7 == Cannibalize
                 Eq(t.ByEditorName("Revitalize Self").IdAtLevel(7), rec.Revitalize);
+                Eq(t.ByEditorName("Heal Self").IdAtLevel(7), rec.HealSelf);
             });
-            Check("max-recovery-level caps the resolved spell", () =>
+            Check("max level caps every recovery spell (incl. Heal Self)", () =>
             {
                 var t = Table(); var s = AllKnown();
-                var rec = RecoverySpells.Resolve(t, s.SpellKnown,
-                    new NB3Settings { UseS2M7 = true, MaxRecoveryLevel = 4 });
+                var rec = RecoverySpells.Resolve(t, s.SpellKnown, new NB3Settings { MaxRecoveryLevel = 4 });
                 Eq(t.ByEditorName("Stamina to Mana Self").IdAtLevel(4), rec.StaminaToMana);
+                Eq(t.ByEditorName("Heal Self").IdAtLevel(4), rec.HealSelf);
             });
-            Check("level7 off caps that recovery at 6", () =>
+            Check("max level 6 caps that recovery at 6", () =>
             {
                 var t = Table(); var s = AllKnown();
-                var rec = RecoverySpells.Resolve(t, s.SpellKnown, new NB3Settings { UseS2M7 = false });
+                var rec = RecoverySpells.Resolve(t, s.SpellKnown, new NB3Settings { MaxRecoveryLevel = 6 });
                 Eq(t.ByEditorName("Stamina to Mana Self").IdAtLevel(6), rec.StaminaToMana);
             });
-            Check("no-fallback + unknown L7 yields unavailable (0)", () =>
+            Check("an unknown top level walks down to the highest known (automatic fallback)", () =>
             {
                 var t = Table(); var famS2M = t.ByEditorName("Stamina to Mana Self");
                 var s = AllKnown(); s.KnowOnly = new HashSet<int>();
                 for (int l = 1; l <= 6; l++) s.KnowOnly.Add(famS2M.IdAtLevel(l)); // knows 1..6, not 7
-                var rec = RecoverySpells.Resolve(t, s.SpellKnown,
-                    new NB3Settings { UseS2M7 = true, FallbackTo6OnUnknown7 = false });
-                Eq(0, rec.StaminaToMana);
+                var rec = RecoverySpells.Resolve(t, s.SpellKnown, new NB3Settings { MaxRecoveryLevel = 7 });
+                Eq(famS2M.IdAtLevel(6), rec.StaminaToMana);   // L7 unknown -> highest known below = L6
             });
 
             Console.WriteLine("\nManaRegenController (the five modes as micro-sequences):");
@@ -354,7 +392,7 @@ namespace NB3.Core.Tests
             Check("RevitalizeS2M rests via Revitalize when stamina low, else casts S2M", () =>
             {
                 var t = Table();
-                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings { UseS2M7 = true, UseRevit7 = true });
+                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings());
                 var c = new ManaRegenController(ManaRegenMode.RevitalizeS2M, rec, 400);
                 var lowStam = AllKnown(); lowStam.CurMana = 0; lowStam.CurStam = 5;
                 var r1 = c.Next(lowStam); Eq(RegenActionKind.Cast, r1.Kind); Eq(rec.Revitalize, r1.SpellId);
@@ -364,7 +402,7 @@ namespace NB3.Core.Tests
             Check("HealKitH2M heals when health low, else casts H2M", () =>
             {
                 var t = Table();
-                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings { UseH2M7 = true });
+                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings());
                 var c = new ManaRegenController(ManaRegenMode.HealKitH2M, rec, 400);
                 var lowHp = AllKnown(); lowHp.CurMana = 0; lowHp.CurHealth = 5;
                 Eq(RegenActionKind.UseHealingKit, c.Next(lowHp).Kind);
@@ -377,7 +415,7 @@ namespace NB3.Core.Tests
                 // compared raw 60 against a floor of 50, read "fine", and cast H2M (draining
                 // health further) instead of healing. It must now heal.
                 var t = Table();
-                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings { UseH2M7 = true });
+                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings());
                 var midHp = AllKnown(); midHp.CurMana = 0; midHp.CurHealth = 60;   // 60/200 = 30%
                 var c50 = new ManaRegenController(ManaRegenMode.HealKitH2M, rec, 400); // default 50%
                 Eq(RegenActionKind.UseHealingKit, c50.Next(midHp).Kind);
@@ -389,7 +427,7 @@ namespace NB3.Core.Tests
             Check("S2M modes replenish stamina by PERCENT of max too", () =>
             {
                 var t = Table();
-                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings { UseS2M7 = true });
+                var rec = RecoverySpells.Resolve(t, _ => true, new NB3Settings());
                 var c = new ManaRegenController(ManaRegenMode.RestS2M, rec, 400);
                 var midStam = AllKnown(); midStam.CurMana = 0; midStam.CurStam = 90; // 90/300 = 30%
                 Eq(RegenActionKind.Rest, c.Next(midStam).Kind);                       // < 50% → rest
@@ -411,7 +449,7 @@ namespace NB3.Core.Tests
             // A rec with all four recovery families resolved (H2M level 7 == the spell named
             // "Cannibalize", 0x091C). Costs default to the Fake's 50 unless a test overrides them.
             System.Func<RecoverySpells> Rec = () => RecoverySpells.Resolve(
-                Table(), _ => true, new NB3Settings { UseS2M7 = true, UseRevit7 = true, UseH2M7 = true });
+                Table(), _ => true, new NB3Settings());
             Check("cannibalize IS the level-7 Health-to-Mana self spell (0x091C)", () =>
             {
                 var fam = Table().ByEditorName("Health to Mana Self");
@@ -457,7 +495,7 @@ namespace NB3.Core.Tests
                 var heal = t.ByEditorName("Heal Self");
                 var healIds = new HashSet<int>(); for (int l = 1; l <= 7; l++) healIds.Add(heal.IdAtLevel(l));
                 var rec = RecoverySpells.Resolve(t, id => !healIds.Contains(id),
-                    new NB3Settings { UseS2M7 = true, UseRevit7 = true, UseH2M7 = true });
+                    new NB3Settings());
                 Eq(0, rec.HealSelf);                                  // doesn't know Heal Self
                 var s = AllKnown(); s.CurMana = 100; s.CurStam = 140; s.CurHealth = 20; // health worse, but no Heal Self
                 var r = new ManaRegenController(ManaRegenMode.SpellRecovery, rec, 400).Next(s);
@@ -468,6 +506,50 @@ namespace NB3.Core.Tests
                 var s = AllKnown(); s.CurMana = 10; s.CurStam = 30; s.CurHealth = 20; // mana < any cast cost
                 Eq(RegenActionKind.Unavailable,
                    new ManaRegenController(ManaRegenMode.SpellRecovery, Rec(), 400).Next(s).Kind);
+            });
+
+            Console.WriteLine("\nSpellRecovery — health->mana toggle (stamina-only recovery when off):");
+            Check("health->mana OFF: stamina low + health healthy -> Revitalize, never Cannibalize", () =>
+            {
+                // Same inputs that give Cannibalize when the toggle is on (see the test above): with
+                // health->mana OFF the loop must NOT convert health; it restores stamina instead.
+                var rec = Rec();
+                var s = AllKnown(); s.CurMana = 100; s.CurStam = 30; s.CurHealth = 200; // stam 10%<floor, health 100%
+                var r = new ManaRegenController(ManaRegenMode.SpellRecovery, rec, 400, null, null,
+                                                allowHealthToMana: false).Next(s);
+                Eq(RegenActionKind.Cast, r.Kind);
+                Eq(rec.Revitalize, r.SpellId);
+                True(r.SpellId != rec.HealthToMana);   // Cannibalize/H2M never issued
+            });
+            Check("health->mana OFF: health more depleted -> still restores stamina, never Heal Self", () =>
+            {
+                // These exact inputs give Heal Self when the toggle is on (health is the worse vital).
+                // With health->mana OFF, health-restore is fully disabled: restore stamina, don't heal.
+                var rec = Rec();
+                var s = AllKnown(); s.CurMana = 100; s.CurStam = 140; s.CurHealth = 20; // 46% stam vs 10% health
+                var r = new ManaRegenController(ManaRegenMode.SpellRecovery, rec, 400, null, null,
+                                                allowHealthToMana: false).Next(s);
+                Eq(RegenActionKind.Cast, r.Kind);
+                Eq(rec.Revitalize, r.SpellId);
+                True(r.SpellId != rec.HealSelf && r.SpellId != rec.HealthToMana);
+            });
+            Check("health->mana OFF: S2M primary is unaffected while stamina is healthy", () =>
+            {
+                var rec = Rec();
+                var s = AllKnown(); s.CurMana = 100; s.CurStam = 300; s.CurHealth = 200; // stam 100% >= floor
+                var r = new ManaRegenController(ManaRegenMode.SpellRecovery, rec, 400, null, null,
+                                                allowHealthToMana: false).Next(s);
+                Eq(RegenActionKind.Cast, r.Kind); Eq(rec.StaminaToMana, r.SpellId);
+            });
+            Check("health->mana OFF: stamina spent, can't restore -> waits, never drains full health", () =>
+            {
+                // Stamina below floor and Revitalize unaffordable (mana too low), health full. The
+                // health->mana path would be the only option — it's off, so this must wait, not heal-drain.
+                var rec = Rec();
+                var s = AllKnown(); s.CurMana = 10; s.CurStam = 30; s.CurHealth = 300; // mana < cast cost, health 100%
+                var r = new ManaRegenController(ManaRegenMode.SpellRecovery, rec, 400, null, null,
+                                                allowHealthToMana: false).Next(s);
+                Eq(RegenActionKind.Unavailable, r.Kind);
             });
 
             Console.WriteLine("\nSpellRecovery — optional, auto-scanned per-vital consumables:");
@@ -545,9 +627,9 @@ namespace NB3.Core.Tests
             });
 
             Console.WriteLine("\nProfileGenerator (character-specific /nbgen):");
-            Check("prefix order is Focus, Willpower, Creature Ench, Mana Conversion, Life Magic", () =>
+            Check("prefix order: Focus, Willpower, Creature Ench, Mana Conversion, Item Ench, Hermetic Link, Life Magic", () =>
             {
-                // Creature/Item/Life castable; Mana Conversion + Life Magic skills present.
+                // Creature/Item/Life castable; Mana Conversion + Life Magic + a weapon skill present.
                 var tr = new Dictionary<int, int> { {31,3},{32,3},{33,3},{16,3},{11,2},{6,2} };
                 var r = ProfileGenerator.Generate(GenCatalog(), id => tr.TryGetValue(id, out var v) ? v : 0);
                 var names = r.Profile.Buffs.Select(b => b.DisplayName).ToList();
@@ -555,7 +637,40 @@ namespace NB3.Core.Tests
                 Eq("Willpower Self", names[1]);
                 Eq("Creature Magic Self", names[2]);
                 Eq("Mana Conversion Self", names[3]);
-                Eq("Life Magic Mastery Self", names[4]);
+                Eq("Item Magic Self", names[4]);            // Item Enchantment mastery, moved up (owner)
+                Eq("Hermetic Link", names[5]);              // Hermetic Link right after it (owner)
+                Eq("Life Magic Mastery Self", names[6]);
+            });
+            Check("Hermetic Link is cast right after Item Enchantment mastery, and only once", () =>
+            {
+                // A melee caster (Item + Creature castable, Sword trained): Hermetic Link is now a
+                // fixed-prefix Core entry, so it lands right after Item Magic Self — not down among
+                // the weapon auras — and the old AddWeaponAuras copy is gone (no duplicate).
+                var tr = new Dictionary<int, int> { {31,3},{32,3},{16,3},{11,2} };
+                var r = ProfileGenerator.Generate(GenCatalog(), id => tr.TryGetValue(id, out var v) ? v : 0);
+                var names = r.Profile.Buffs.Select(b => b.DisplayName).ToList();
+                int item = names.IndexOf("Item Magic Self"), herm = names.IndexOf("Hermetic Link");
+                True(item >= 0 && herm == item + 1, "Hermetic Link immediately follows Item Magic Self");
+                Eq(1, names.Count(n => n == "Hermetic Link"));   // exactly one, not duplicated by AddWeaponAuras
+            });
+            Check("generated profile checkpoints the level bootstrap right after Creature Enchantment", () =>
+            {
+                var tr = new Dictionary<int, int> { {31,3},{32,3},{33,3},{16,3},{11,2} };
+                var r = ProfileGenerator.Generate(GenCatalog(), id => tr.TryGetValue(id, out var v) ? v : 0);
+                var names = r.Profile.Buffs.Select(b => b.DisplayName).ToList();
+                Eq("Focus Self", names[0]); Eq("Willpower Self", names[1]); Eq("Creature Magic Self", names[2]);
+                Eq(3, r.Profile.CastingStatPrefixCount());        // prefix = Focus, Willpower, Creature Enchantment
+            });
+            Check("CastingStatPrefixCount is 0 without the mastery, and survives a profile round-trip", () =>
+            {
+                var none = new ModernProfile { Name = "n" };
+                none.Buffs.Add(new ModernBuffEntry { DisplayName = "Strength Self", Category = 6, Target = SpellTarget.Self });
+                Eq(0, none.CastingStatPrefixCount());
+
+                var p = new ModernProfile { Name = "p" };
+                p.Buffs.Add(new ModernBuffEntry { DisplayName = "Focus Self", Category = 1, Target = SpellTarget.Self });
+                p.Buffs.Add(new ModernBuffEntry { DisplayName = "Creature Magic Self", Category = 3, Target = SpellTarget.Self });
+                Eq(2, ModernProfile.Parse(p.ToXml()).CastingStatPrefixCount());  // DisplayName persists -> checkpoint survives
             });
             Check("skill masteries gate on trained/spec (Sword in, Bow out)", () =>
             {
@@ -1223,6 +1338,46 @@ namespace NB3.Core.Tests
                 Eq(250, c.ById(cast.SpellId).Level);                // Strength Self VI, not the L8
                 True(plan.Warnings.Any(w => w.Message.IndexOf("skill-capped", StringComparison.OrdinalIgnoreCase) >= 0));
             });
+
+            Console.WriteLine("\nLevel bootstrap (re-plan after skill rises casts the higher level):");
+            Check("re-plan after skill rises recasts the buff at a HIGHER level (Focus 6 -> 7)", () =>
+            {
+                // The mechanism the owner described: a buff lands at a low level because skill was too
+                // low; once the casting-stat buffs raise the skill, a re-plan (ForceAll off) casts it
+                // higher — the active lower level does NOT block it (stacking: higher surpasses lower).
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                int grp = c.ById(2).Category;                       // a real self ladder (Strength: VI=250, L7=300, L8=400)
+                var prof = new ModernProfile { Name = "p" };
+                prof.Buffs.Add(new ModernBuffEntry { Category = grp, Target = SpellTarget.Self, DisplayName = "Strength Self" });
+                var st = AllKnown();
+
+                st.SkillBySchool["Creature"] = 300;                 // low skill -> capped to VI (250)
+                var plan1 = new ModernBuffPlanner(c).Plan(prof, st, new SkillPolicy { Enabled = true, MinChancePercent = 90 });
+                var cast1 = plan1.Actions.Single(a => a.Kind == CastKind.CastSelf);
+                Eq(250, c.ById(cast1.SpellId).Level);
+
+                st.ActiveEnchants.Add(cast1.SpellId);               // that level is now active
+                st.SkillBySchool["Creature"] = 500;                 // the casting-stat buffs raised the skill
+
+                var plan2 = new ModernBuffPlanner(c).Plan(prof, st,
+                    new SkillPolicy { Enabled = true, MinChancePercent = 90 },
+                    new RebuffPolicy { ForceAll = false });         // the bootstrap upgrade pass
+                var cast2 = plan2.Actions.Single(a => a.Kind == CastKind.CastSelf);
+                True(c.ById(cast2.SpellId).Level > 250, "recast at a higher level once skill rose");
+            });
+            Check("the upgrade loop terminates: nothing to recast once at the skill's max", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                int grp = c.ById(2).Category;
+                var prof = new ModernProfile { Name = "p" };
+                prof.Buffs.Add(new ModernBuffEntry { Category = grp, Target = SpellTarget.Self, DisplayName = "Strength Self" });
+                var st = AllKnown(); st.SkillBySchool["Creature"] = 500;         // already high
+                var plan1 = new ModernBuffPlanner(c).Plan(prof, st, new SkillPolicy { Enabled = true, MinChancePercent = 90 });
+                st.ActiveEnchants.Add(plan1.Actions.Single(a => a.Kind == CastKind.CastSelf).SpellId); // top level active
+                var plan2 = new ModernBuffPlanner(c).Plan(prof, st,
+                    new SkillPolicy { Enabled = true, MinChancePercent = 90 }, new RebuffPolicy { ForceAll = false });
+                Eq(0, plan2.Actions.Count(a => a.Kind != CastKind.Equip));       // stable -> loop ends
+            });
             Check("spellbook-sourced selection can't pick a monster/boss spell sharing the group", () =>
             {
                 // Category 37 (Invulnerability / Melee Defense) in the client spell table also holds
@@ -1600,6 +1755,67 @@ namespace NB3.Core.Tests
                 s.WieldedGuids.Add(0xAAAA);
                 var plan = new BuffEngine(t).BuildPlan(Sample(), s);
                 Eq(0, plan.Actions.Count(a => a.Kind == CastKind.Equip));
+            });
+
+            Console.WriteLine("\nAuto-wield a caster at Start (owner: wield a wand if the casting hand is empty):");
+            // A profile with one real self-buff, so a plan has "something to cast" (1332 is a self
+            // category used above; AllKnown knows every spell, so it resolves to a CastSelf).
+            System.Func<SpellCatalog, ModernProfile> oneBuff = cat =>
+            {
+                var p = new ModernProfile { Name = "aw" };
+                p.Buffs.Add(new ModernBuffEntry { Category = cat.ById(1332).Category, Target = SpellTarget.Self });
+                return p;
+            };
+            Check("empty hand + a wand in the pack -> plan wields it FIRST, ahead of the casts", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                var st = AllKnown();                          // WieldedCaster = 0 (empty hand)
+                st.PackCasters.Add(0xCA57E1);                 // one caster carried
+                var plan = new ModernBuffPlanner(c).Plan(oneBuff(c), st, null, null, autoWieldCaster: true);
+                Eq(CastKind.Equip, plan.Actions[0].Kind);
+                Eq(0xCA57E1, plan.Actions[0].TargetGuid);
+                True(plan.Actions.Skip(1).Any(a => a.Kind == CastKind.CastSelf), "casts follow the wield");
+            });
+            Check("already holding a caster -> no auto-wield", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                var st = AllKnown(); st.WieldedCaster = 0xBEEF; st.PackCasters.Add(0xCA57E1);
+                var plan = new ModernBuffPlanner(c).Plan(oneBuff(c), st, null, null, autoWieldCaster: true);
+                Eq(0, plan.Actions.Count(a => a.Kind == CastKind.Equip));
+            });
+            Check("empty hand + NO caster carried -> a warning, no equip", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                var st = AllKnown();                          // hand empty, nothing to wield
+                var plan = new ModernBuffPlanner(c).Plan(oneBuff(c), st, null, null, autoWieldCaster: true);
+                Eq(0, plan.Actions.Count(a => a.Kind == CastKind.Equip));
+                True(plan.Warnings.Any(w => (w.Message ?? "").IndexOf("caster", StringComparison.OrdinalIgnoreCase) >= 0),
+                     "warns that no caster is available");
+            });
+            Check("nothing to cast -> no pointless auto-wield", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                var st = AllKnown(); st.PackCasters.Add(0xCA57E1);
+                var empty = new ModernProfile { Name = "empty" };   // no buffs -> no casts
+                var plan = new ModernBuffPlanner(c).Plan(empty, st, null, null, autoWieldCaster: true);
+                Eq(0, plan.Actions.Count);
+            });
+            Check("auto-wield is OFF by default (unchanged planner API)", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                var st = AllKnown(); st.PackCasters.Add(0xCA57E1);
+                var plan = new ModernBuffPlanner(c).Plan(oneBuff(c), st);   // no flag
+                Eq(0, plan.Actions.Count(a => a.Kind == CastKind.Equip));
+            });
+            Check("no duplicate wield when the profile already equips that caster", () =>
+            {
+                var c = SpellCatalog.Load(Fx("spellcat-2012.tsv"));
+                var p = oneBuff(c); p.EquipItems.Add("My Wand");
+                var st = AllKnown();
+                st.ItemsByName["My Wand"] = 0xCA57E1;         // the profile's equip resolves to the caster
+                st.PackCasters.Add(0xCA57E1);                 // and it's the auto-pick too
+                var plan = new ModernBuffPlanner(c).Plan(p, st, null, null, autoWieldCaster: true);
+                Eq(1, plan.Actions.Count(a => a.Kind == CastKind.Equip && a.TargetGuid == 0xCA57E1));
             });
 
             Console.WriteLine("\nModernProfileFactory (the /nbnew starter profile):");
@@ -2028,6 +2244,14 @@ namespace NB3.Core.Tests
             /// <summary>Guids currently wielded (for the equip-skip check).</summary>
             public HashSet<int> WieldedGuids { get; } = new HashSet<int>();
             public bool IsWielded(int guid) => WieldedGuids.Contains(guid);
+
+            /// <summary>Caster model: the guid in the casting hand (0 = empty), and the unwielded
+            /// casters carried in the pack (FindWieldableCaster returns the first). Kept separate so a
+            /// test can model "hand empty but a wand in the pack" vs "already holding one".</summary>
+            public int WieldedCaster;
+            public List<int> PackCasters { get; } = new List<int>();
+            public int WieldedCasterId => WieldedCaster;
+            public int FindWieldableCaster() => PackCasters.Count > 0 ? PackCasters[0] : 0;
 
             // cycle seam
             public bool IsCasting { get; set; } = false;

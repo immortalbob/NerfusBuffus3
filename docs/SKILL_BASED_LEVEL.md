@@ -73,13 +73,44 @@ Defaults: **on**, at **90%**. Persisted per character (`skillBasedLevel`,
 As your magic skill grows, the bot automatically promotes buffs to higher levels the moment
 they cross the reliability threshold — no manual re-capping.
 
+## Level bootstrap (recast at the higher level once your own skill is up)
+
+The skill cap creates a chicken-and-egg on the buffs that raise your casting skill: at low skill you
+can only land **Focus 6**, but Focus — with Willpower and the Creature Enchantment mastery — is
+exactly what lifts your Creature Enchantment skill (and, through the Focus/Self attributes, every
+magic skill). Once those land, **Focus 7** is castable. Reading skill once per run would leave Focus
+stuck at 6 until the next `/nbuff`.
+
+So a run is **phased** (`bootstrapLevels`, default on, active only when the skill cap is on):
+
+1. **Cast the casting-stat prefix first** — the buffs up to and including Creature Enchantment
+   mastery (`ModernProfile.CastingStatPrefixCount()` finds the checkpoint by the generator's
+   `"Creature Magic Self"` family name, which persists in the profile XML).
+2. **Re-plan the rest at the now-higher skill**, so it's cast at the level your buffed skill allows
+   from the start rather than the capped level.
+3. **Keep re-checking (with ForceAll off) until nothing improves.** Each pass recasts only genuine
+   level-ups. The run tracks the highest level (ACE Power) it has cast per stacking category, and an
+   upgrade pass casts a category **only when it can now go strictly higher than that** — so a buff
+   whose active enchantment the stacking read can't re-match (some auras/banes/item-target casts
+   create an enchantment the coverage check misses) is cast once in the initial buff and never
+   re-cast. Without that guard those buffs re-appear in every re-plan and the loop spins to its cap;
+   with it, the loop stops the moment no category can climb. The bump cascades — the Item/Life/War
+   masteries let their banes/protections rise a level on the following pass — and it always
+   terminates, because each pass strictly raises at least one category's level, bounded by the max
+   spell level (hard cap: a handful of passes as a backstop).
+
+Turn it off with `/nbset bootstrap 0` (buffs then cast once at the level your skill allows at the
+start). A profile with no Creature Enchantment mastery entry — a hand-built one without the
+checkpoint — skips straight to a single pass.
+
 ## Scope / notes
 
 - Applies to the category-based **buff** selection (Creature/Life/Item self+other). The
   recovery spells (S2M/H2M/Revit) keep their existing `MaxRecoveryLevel` cap; a skill cap
   there is a possible follow-up.
-- The skill is read once at cycle start. If a self-buff raises the very skill that casts
-  later buffs, the promotion is picked up on the *next* `/nbuff`, not mid-cycle.
+- The skill is read fresh at the start of every pass (see *Level bootstrap* above), so when a
+  self-buff raises the very skill that casts later buffs, the promotion is picked up **within the
+  same `/nbuff`** — the run recasts at the higher level once your casting stats land.
 - **Reading the effective skill.** Two live shapes are tried in order (adapter dump):
   `CharacterFilter.EffectiveSkill[CharFilterSkillType]` (int), then
   `CharacterFilter.Skills[type].Current`/`.Buffed` (SkillInfoWrapper). If BOTH read `0`, the cap
@@ -90,10 +121,12 @@ they cross the reliability threshold — no manual re-capping.
 
 ## Verification
 
-Part of the `NB3.Core.Tests` harness (currently **182 passed, 0 failed**); 9 cases exercise this
-fix: the ACE formula incl. the Power−50 floor, the 0.07 sigmoid landmarks, monotonicity,
-skill-capped downgrade on the real Strength line, high-skill no-cap, skill-0 fail-open, policy-off
-parity, and the planner's cap warning. `shimcheck: PASS`, `viewlint: PASS`.
+Part of the `NB3.Core.Tests` harness (currently **197 passed, 0 failed**); cases exercise this fix
+and the level bootstrap: the ACE formula incl. the Power−50 floor, the 0.07 sigmoid landmarks,
+monotonicity, skill-capped downgrade on the real Strength line, high-skill no-cap, skill-0
+fail-open, policy-off parity, the planner's cap warning, and the bootstrap re-plan (a raised skill
+recasts a level-6 buff at 7, and the loop terminates once at the skill's max). `shimcheck: PASS`,
+`viewlint: PASS`.
 
 > The `mincast` threshold is also exposed on the **NB3 Options** panel now (the *"Min cast
 > chance %"* box), in addition to `/nbset mincast`.

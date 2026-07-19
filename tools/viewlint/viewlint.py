@@ -14,6 +14,11 @@ import sys, glob, os
 import xml.etree.ElementTree as ET
 
 TAB_STRIP = 28          # px eaten by a Notebook's tab strip (doc 14 sect. 2)
+VIEW_TITLE_BAR = 28     # px VVS reserves for the window title bar out of the declared <view height>:
+                        # a control whose bottom falls in that zone is clipped in-game even though it
+                        # sits within the declared height. Every shipped view leaves >=35 px of bottom
+                        # slack for exactly this reason; enforcing it here catches an over-shrunk window
+                        # (the "resize went badly" clip) offline instead of on the live client.
 CHAR_W = 0.48           # px per char per fontsize unit (doc 14 sect. 10)
 CHECK_GLYPH = 18        # px for a checkbox glyph
 TOLERANCE = 1.0         # the width heuristic is +-subpixel per char
@@ -80,7 +85,9 @@ def lint(path):
                     if a[1] < b[1] + b[2] and b[1] < a[1] + a[2]:
                         issues.append(f"OVERLAP '{a[4]}'({a[1]}..{a[1]+a[2]}) vs '{b[4]}'({b[1]}..{b[1]+b[2]}) at top~{a[0]} ({where})")
 
-    walk(root, vw, vh, '')
+    # Subtract the VVS title bar from the usable height so a control pushed into that bottom zone is
+    # flagged (BOTTOM-EDGE) — this is what the old full-height check missed.
+    walk(root, vw, vh - VIEW_TITLE_BAR, '')
     rows(root, '')
     return issues
 

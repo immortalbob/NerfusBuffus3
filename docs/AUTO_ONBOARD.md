@@ -25,8 +25,8 @@ press **START**.
 Auto-generation happens **only when no profile of that name exists yet**. On every subsequent
 login the existing profile is left exactly as you edited it and simply re-selected — so the login
 hook is safe to run every time. It is *generate-if-missing*, not *regenerate*. To rebuild from
-freshly trained skills on purpose, run `/nbgen <yourname>` (it overwrites and re-selects), or
-delete the profile and relog.
+freshly trained skills on purpose, click **Rescan Character** in the Options window, run
+`/nbgen <yourname>` (both overwrite and re-select), or delete the profile and relog.
 
 ## Why it's serviced from the poll, not the event handler
 

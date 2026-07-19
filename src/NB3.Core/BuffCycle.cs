@@ -148,20 +148,28 @@ namespace NB3.Core
                 return Step(StepKind.Done, reason: "cycle complete");
             }
 
-            if (!state.InMagicCombatMode) return Step(StepKind.EnterMagicMode, reason: "need Magic mode");
+            // A cast in flight holds the client busy — wait it out before ANY step (equip or cast).
+            // Busy counts EPISODES (contiguous busy runs), not ticks: with chat-driven resolution our
+            // own cast holds IsCasting for its whole 1–4 s windup, and counting every 300 ms poll would
+            // inflate the view's Busy readout.
             if (state.IsCasting)
             {
-                // Busy counts EPISODES (contiguous busy runs), not ticks: with chat-driven
-                // resolution our own cast holds IsCasting for its whole 1–4 s windup, and
-                // counting every 300 ms poll would inflate the view's Busy readout.
                 if (!_inBusyRun) { BusyHits++; _inBusyRun = true; }
                 return Step(StepKind.Busy, reason: "client busy");
             }
             _inBusyRun = false;
 
             var a = _actions[_cursor];
+
+            // Equips run BEFORE the Magic-mode gate. Entering the Magic stance requires a caster
+            // already in hand (SetCombatMode needs the proper weapon type), so a caster/focus equip —
+            // including the planner's auto-wield — must happen first; otherwise EnterMagicMode would
+            // loop forever with an empty hand and the equip after it would never be reached. Magic
+            // mode is still entered below, ahead of every Cast.
             if (a.Kind == CastKind.Equip)
                 return Step(StepKind.Equip, a, reason: "equip");
+
+            if (!state.InMagicCombatMode) return Step(StepKind.EnterMagicMode, reason: "need Magic mode");
 
             // Mana gate: regen (if configured) when the next spell is unaffordable OR mana has
             // fallen below the reserve floor (% of max) — so it keeps a reserve instead of buffing

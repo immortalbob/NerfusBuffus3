@@ -63,13 +63,16 @@ namespace NB3.Core
         private readonly int _targetMana;
         private readonly RegenThresholds _th;
         private readonly RegenConsumables _cons;
+        private readonly bool _allowHp2Mana;
 
         public ManaRegenController(ManaRegenMode mode, RecoverySpells rec, int targetMana,
-                                   RegenThresholds thresholds = null, RegenConsumables consumables = null)
+                                   RegenThresholds thresholds = null, RegenConsumables consumables = null,
+                                   bool allowHealthToMana = true)
         {
             _mode = mode; _rec = rec; _targetMana = targetMana;
             _th = thresholds ?? new RegenThresholds();
             _cons = consumables ?? RegenConsumables.None;
+            _allowHp2Mana = allowHealthToMana;
         }
 
         public RegenStep Next(IGameState state)
@@ -129,6 +132,7 @@ namespace NB3.Core
                     // mana) then Heal Self — the spell-based recovery used when no kits/potions are on.
                     RegenStep RestoreHealth()
                     {
+                        if (!_allowHp2Mana) return null;   // stamina-only recovery: never touch health
                         if (_cons.Kits)    { int g = state.FindBestHealingKit(); if (g != 0) return UseKit(g); }
                         if (_cons.Potions) { int g = state.FindBestPotion(Vital.Health); if (g != 0) return Drink(g, Vital.Health, "health potion -> Cannibalize"); }
                         if (_rec.HealSelf != 0 && Affordable(state, _rec.HealSelf)) return Cast(_rec.HealSelf);
@@ -139,9 +143,10 @@ namespace NB3.Core
                     if (staPct >= _th.StaminaFloor && _rec.StaminaToMana != 0 && Affordable(state, _rec.StaminaToMana))
                         return Cast(_rec.StaminaToMana);
 
-                    // 2) Health -> Mana via Cannibalize (the level-7 H2M) while health can spare it.
-                    //    Also the mana source for a character who doesn't know S2M.
-                    if (hpPct >= _th.HealthFloor && _rec.HealthToMana != 0 && Affordable(state, _rec.HealthToMana))
+                    // 2) Health -> Mana via Cannibalize (the level-7 H2M) while health can spare it —
+                    //    unless health->mana is turned off (stamina-only recovery). Also the mana
+                    //    source for a character who doesn't know S2M.
+                    if (_allowHp2Mana && hpPct >= _th.HealthFloor && _rec.HealthToMana != 0 && Affordable(state, _rec.HealthToMana))
                         return Cast(_rec.HealthToMana);
 
                     // 3) Both source vitals below floor -> restore the MORE-depleted one (keeps both

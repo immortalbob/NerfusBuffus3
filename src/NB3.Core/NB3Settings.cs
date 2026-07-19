@@ -27,14 +27,11 @@ namespace NB3.Core
     {
         public int CharacterId { get; set; }
 
-        // Healing kits to use
+        /// <summary>Whether the recovery loop may use healing kits at all (the single "Use Healing
+        /// Kits" Options checkbox). The best kit carried is chosen automatically by the inventory
+        /// scan, so there is no per-tier choice; internally this is the full tier set when on and
+        /// <see cref="HealingKitTiers.None"/> when off.</summary>
         public HealingKitTiers HealingKits { get; set; } = HealingKitTiers.None;
-
-        // Level 7 spells
-        public bool UseRevit7 { get; set; }
-        public bool UseS2M7 { get; set; }
-        public bool UseH2M7 { get; set; }
-        public bool FallbackTo6OnUnknown7 { get; set; } = true;
 
         /// <summary>"Expected % of Spell Cost" (the AR edit): buff while mana ≥ this % of the
         /// next spell's cost.</summary>
@@ -58,11 +55,13 @@ namespace NB3.Core
 
         /// <summary>OPTIONAL fallback for the spell-recovery mode: may drink a mana elixir as a last
         /// resort when spells alone can't recover. Off by default — potions are opt-in, not required.
-        /// (Healing kits are the other optional fallback, gated by the <see cref="HealingKits"/>
-        /// tier selection.)</summary>
+        /// (Healing kits are the other optional fallback, gated by <see cref="HealingKits"/>.)</summary>
         public bool UsePotions { get; set; } = false;
 
-        /// <summary>"Maximum level for H2M, S2M and Revit".</summary>
+        /// <summary>Maximum level for the recovery spells (H2M / S2M / Revitalize / Heal Self). The
+        /// loop casts the highest level the character knows at or below this cap, walking down when a
+        /// higher level isn't known — so this single 1–7 value replaces the old per-spell level-7
+        /// toggles and the "fall back to 6" switch.</summary>
         public int MaxRecoveryLevel { get; set; } = 7;
 
         public bool QuietMode { get; set; }
@@ -109,6 +108,48 @@ namespace NB3.Core
         /// character, like every other setting.</summary>
         public bool AutoGenerateOnLogin { get; set; } = true;
 
+        /// <summary>When true (the DEFAULT), after the casting-stat buffs land (Focus / Willpower /
+        /// Creature Enchantment, which raise the very skill that decides how high you can cast), NB3
+        /// re-checks whether any buff can now be cast at a HIGHER level than it landed at, and recasts
+        /// those — repeating until nothing improves. So a Focus that started at level 6 because your
+        /// skill was too low is refreshed to 7 once those buffs lift your skill, and the bump cascades
+        /// to the banes/protections through their masteries. Only meaningful with the skill-based
+        /// level cap on (otherwise levels are never capped). Turn off with <c>/nbset bootstrap 0</c>.</summary>
+        public bool BootstrapLevels { get; set; } = true;
+
+        /// <summary>When true (the DEFAULT), starting a buff run auto-wields a spellcasting implement
+        /// (wand / staff / orb / sceptre) from your pack if your casting hand is empty — you can't
+        /// enter the Magic stance or cast without one. It picks the first caster it finds and never
+        /// disturbs a caster you're already holding. Turn it off with <c>/nbset autowield 0</c> to
+        /// manage your caster yourself. Per character, like every other setting.</summary>
+        public bool AutoWieldCaster { get; set; } = true;
+
+        /// <summary>Spell-recovery mode only: may the loop convert HEALTH into mana (Cannibalize /
+        /// H2M) and restore health (Heal Self) when it does? On by default. Turn it OFF for a
+        /// stamina-only recovery that never touches health — the mode then makes mana solely from
+        /// stamina (S2M) and restores it with Revitalize.</summary>
+        public bool UseHealthToMana { get; set; } = true;
+
+        /// <summary>Give up on one action after this many consecutive fizzles/timeouts and skip it
+        /// (guards the component pouch against a spell that will never land). 0 = retry forever.</summary>
+        public int MaxAttemptsPerAction { get; set; } = 8;
+
+        /// <summary>Advanced: the per-cast watchdog (ms) — a cast with no outcome line within this
+        /// window is called a Timeout and retried. The partial-feedback watchdog tracks at half this.
+        /// Raise on a laggy server; lower on a fast one.</summary>
+        public int CastTimeoutMs { get; set; } = 10000;
+
+        /// <summary>Advanced: settle window (ms) after a cast resolves before the next cast/regen
+        /// fires — avoids firing into the client's post-cast recovery tail (which silently drops it).</summary>
+        public int CastSettleMs { get; set; } = 500;
+
+        /// <summary>Advanced: after <see cref="MaxRegenCastFailures"/> failed recovery casts in a row,
+        /// throttle further recovery-cast attempts to once per this many ms (never gives up).</summary>
+        public int RegenRetryBackoffMs { get; set; } = 3000;
+
+        /// <summary>Advanced: consecutive failed recovery casts before the backoff (above) engages.</summary>
+        public int MaxRegenCastFailures { get; set; } = 5;
+
         // ---- persistence ---------------------------------------------------------------
 
         public static string PathFor(int characterId)
@@ -145,10 +186,6 @@ namespace NB3.Core
             if (B(r, "usePeerless"))  kits |= HealingKitTiers.Peerless;
             s.HealingKits = kits;
 
-            s.UseRevit7 = B(r, "useRevit7");
-            s.UseS2M7 = B(r, "useS2M7");
-            s.UseH2M7 = B(r, "useH2M7");
-            s.FallbackTo6OnUnknown7 = B(r, "fallbackTo6", true);
             s.ExpectedPctSpellCost = I(r, "expectedPctSpellCost", 100);
             s.ManaFloorPercent = I(r, "manaFloorPercent", 25);
             s.ManaRegenTargetPercent = I(r, "manaRegenTargetPercent", 90);
@@ -164,6 +201,14 @@ namespace NB3.Core
             s.HealthFloorPercent = I(r, "healthFloorPercent", 50);
             s.StaminaFloorPercent = I(r, "staminaFloorPercent", 50);
             s.AutoGenerateOnLogin = B(r, "autoGenerateOnLogin", true);
+            s.BootstrapLevels = B(r, "bootstrapLevels", true);
+            s.AutoWieldCaster = B(r, "autoWieldCaster", true);
+            s.UseHealthToMana = B(r, "useHealthToMana", true);
+            s.MaxAttemptsPerAction = I(r, "maxAttemptsPerAction", 8);
+            s.CastTimeoutMs = I(r, "castTimeoutMs", 10000);
+            s.CastSettleMs = I(r, "castSettleMs", 500);
+            s.RegenRetryBackoffMs = I(r, "regenRetryBackoffMs", 3000);
+            s.MaxRegenCastFailures = I(r, "maxRegenCastFailures", 5);
             return s;
         }
 
@@ -174,10 +219,6 @@ namespace NB3.Core
                 new XAttribute("usePlentiful", HealingKits.HasFlag(HealingKitTiers.Plentiful)),
                 new XAttribute("useTreated", HealingKits.HasFlag(HealingKitTiers.Treated)),
                 new XAttribute("usePeerless", HealingKits.HasFlag(HealingKitTiers.Peerless)),
-                new XAttribute("useRevit7", UseRevit7),
-                new XAttribute("useS2M7", UseS2M7),
-                new XAttribute("useH2M7", UseH2M7),
-                new XAttribute("fallbackTo6", FallbackTo6OnUnknown7),
                 new XAttribute("expectedPctSpellCost", ExpectedPctSpellCost),
                 new XAttribute("manaFloorPercent", ManaFloorPercent),
                 new XAttribute("manaRegenTargetPercent", ManaRegenTargetPercent),
@@ -192,7 +233,15 @@ namespace NB3.Core
                 new XAttribute("rebuffMinutesRemaining", RebuffMinutesRemaining),
                 new XAttribute("healthFloorPercent", HealthFloorPercent),
                 new XAttribute("staminaFloorPercent", StaminaFloorPercent),
-                new XAttribute("autoGenerateOnLogin", AutoGenerateOnLogin));
+                new XAttribute("autoGenerateOnLogin", AutoGenerateOnLogin),
+                new XAttribute("bootstrapLevels", BootstrapLevels),
+                new XAttribute("autoWieldCaster", AutoWieldCaster),
+                new XAttribute("useHealthToMana", UseHealthToMana),
+                new XAttribute("maxAttemptsPerAction", MaxAttemptsPerAction),
+                new XAttribute("castTimeoutMs", CastTimeoutMs),
+                new XAttribute("castSettleMs", CastSettleMs),
+                new XAttribute("regenRetryBackoffMs", RegenRetryBackoffMs),
+                new XAttribute("maxRegenCastFailures", MaxRegenCastFailures));
             return new XDocument(new XDeclaration("1.0", null, null), r).ToString();
         }
 

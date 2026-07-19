@@ -267,6 +267,41 @@ namespace NB3.Plugin
             catch { return false; }
         }
 
+        /// <summary>The currently-wielded spellcasting implement (wand/staff/orb/sceptre): the first
+        /// inventory item whose CURRENT_WIELDED_LOCATION (key 10) includes the WandStaffOrb slot
+        /// (<see cref="LocCaster"/> = 0x01000000; corpus "Focs=0x1000000"), or 0 if the hand is empty.</summary>
+        public int WieldedCasterId
+        {
+            get
+            {
+                try
+                {
+                    foreach (WorldObject wo in _core.WorldFilter.GetInventory())
+                        if ((ValueOr(wo, KeyWieldedLocation) & LocCaster) != 0) return wo.Id;
+                }
+                catch { }
+                return 0;
+            }
+        }
+
+        /// <summary>A caster CARRIED but not wielded — the first inventory item that can go in the
+        /// WandStaffOrb slot (VALID_LOCATIONS key 9 &amp; <see cref="LocCaster"/>) and isn't currently
+        /// wielded anywhere (CURRENT_WIELDED_LOCATION == 0). 0 when none is carried. Wands, staves,
+        /// orbs and sceptres all share this one slot, so this finds any of them.</summary>
+        public int FindWieldableCaster()
+        {
+            try
+            {
+                foreach (WorldObject wo in _core.WorldFilter.GetInventory())
+                {
+                    if (ValueOr(wo, KeyWieldedLocation) != 0) continue;      // already wielded (some slot)
+                    if ((ValueOr(wo, KeyLocations) & LocCaster) != 0) return wo.Id;
+                }
+            }
+            catch { }
+            return 0;
+        }
+
         // ---- /nbid probes: what a creature has in its weapon/shield slots ----------------
 
         public int WieldedWeapon(int ownerId) => FindWielded(ownerId, LocMelee | LocMissile | LocCaster);

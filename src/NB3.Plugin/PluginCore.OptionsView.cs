@@ -7,9 +7,15 @@ namespace NB3.Plugin
     /// The recovered "NB3 Options" view (nb3-charconfig.xml), wired one-for-one to
     /// <see cref="NB3.Core.NB3Settings"/> — the same option set the original persisted under
     /// HKCU\software\NerfSoft\NerfusBuffus3\Options\0x&lt;charGUID&gt;, now in the per-character
-    /// XML. Control names are the original's: checkboxUse*, checkboxFallbackTo6,
-    /// checkboxQuietMode, checkboxEditorPermaDelete, editAR, editMaxSpellLevel,
-    /// choiceManaMode, staticGUIDName, pbSave, pbOptDismiss.
+    /// XML, plus the everyday knobs that used to be /nbset-only. Controls, by section:
+    ///   Mana Regeneration — choiceManaMode (default 6 = Spells), checkboxUseKits (single on/off —
+    ///     the scan auto-picks the best kit), checkboxUsePotions, checkboxUseHealthToMana (Cannibalize/H2M);
+    ///   Recovery thresholds — editManaFloor, editManaTarget, editStamPct, editHealthPct,
+    ///     editMaxSpellLevel (H2M/S2M/Revit/Heal level cap);
+    ///   Buffing — editAR (Expected % of Spell Cost), checkboxSkillCap, editMinCast, checkboxRecast, editRebuffMins;
+    ///   Misc — checkboxAutogen, checkboxQuietMode, checkboxEditorPermaDelete;
+    ///   plus staticGUIDName, pbSave, pbRescan, pbOptDismiss. (The original's per-tier kit checkboxes
+    /// and the level-7 toggles were folded into the single kit checkbox and the max-level field.)
     ///
     /// Per docs 03 §10.6 / 14 §6: Change events are advisory only. Each control is SEEDED from
     /// the model exactly once (the first poll it resolves; tracked in <see cref="_optSeeded"/>)
@@ -71,20 +77,32 @@ namespace NB3.Plugin
             var s = _settings;
             if (s == null) return;
 
-            SeedCheck("checkboxUsePlentiful", (s.HealingKits & NB3.Core.HealingKitTiers.Plentiful) != 0);
-            SeedCheck("checkboxUseTreated",   (s.HealingKits & NB3.Core.HealingKitTiers.Treated) != 0);
-            SeedCheck("checkboxUsePeerless",  (s.HealingKits & NB3.Core.HealingKitTiers.Peerless) != 0);
-            SeedCheck("checkboxUseRevit7", s.UseRevit7);
-            SeedCheck("checkboxUseS2M7", s.UseS2M7);
-            SeedCheck("checkboxUseH2M7", s.UseH2M7);
-            SeedCheck("checkboxFallbackTo6", s.FallbackTo6OnUnknown7);
+            // ===== Mana Regeneration =====
+            SeedCombo("choiceManaMode", (int)s.ManaRegenMode, null);          // options 0-6 ship in the XML; default 6 = Spells
+            // One "Use Healing Kits" checkbox — the inventory scan auto-picks the best kit carried,
+            // so there's no per-tier choice; ON == the full tier set, OFF == none.
+            SeedCheck("checkboxUseKits", s.HealingKits != NB3.Core.HealingKitTiers.None);
+            SeedCheck("checkboxUsePotions", s.UsePotions);
+            SeedCheck("checkboxUseHealthToMana", s.UseHealthToMana);          // Cannibalize / H2M allowed?
+
+            // ===== Recovery thresholds =====
+            SeedText("editManaFloor", s.ManaFloorPercent.ToString());         // regen when mana below this %
+            SeedText("editManaTarget", s.ManaRegenTargetPercent.ToString());  // regen back up to this %
+            SeedText("editStamPct", s.StaminaFloorPercent.ToString());        // replenish stamina below this %
+            SeedText("editHealthPct", s.HealthFloorPercent.ToString());       // heal below this % before H2M
+            SeedText("editMaxSpellLevel", s.MaxRecoveryLevel.ToString());     // H2M/S2M/Revit/Heal level cap
+
+            // ===== Buffing =====
+            SeedText("editAR", s.ExpectedPctSpellCost.ToString());            // "Expected % of Spell Cost"
+            SeedCheck("checkboxSkillCap", s.SkillBasedLevel);                 // cap buff level to reliably-castable
+            SeedText("editMinCast", s.MinCastChancePercent.ToString());       // "barely reachable" buff threshold
+            SeedCheck("checkboxRecast", s.RecastActiveBuffs);                 // recast buffs already active
+            SeedText("editRebuffMins", s.RebuffMinutesRemaining.ToString());  // (recast off) refresh window, minutes
+
+            // ===== Misc =====
+            SeedCheck("checkboxAutogen", s.AutoGenerateOnLogin);              // auto-generate profile at login
             SeedCheck("checkboxQuietMode", s.QuietMode);
             SeedCheck("checkboxEditorPermaDelete", s.EditorPermaDelete);
-            SeedCheck("checkboxUsePotions", s.UsePotions);
-            SeedText("editAR", s.ExpectedPctSpellCost.ToString());
-            SeedText("editMaxSpellLevel", s.MaxRecoveryLevel.ToString());
-            SeedText("editMinCast", s.MinCastChancePercent.ToString());       // "barely reachable" buff threshold
-            SeedCombo("choiceManaMode", (int)s.ManaRegenMode, null);          // options 0-6 ship in the XML
 
             // The header label is diff-guarded, so it's cheap to refresh every poll.
             string name = "";
@@ -134,9 +152,33 @@ namespace NB3.Plugin
                 _settings.Save(NB3.Core.NB3Settings.PathFor(_settings.CharacterId));
                 // Echo what was saved so the values are verifiable at a glance (doc 14 §6.3).
                 var s = _settings;
-                Say($"Options saved (0x{s.CharacterId:X8}): kits={s.HealingKits} potions={(s.UsePotions ? 1 : 0)} aggr={s.ExpectedPctSpellCost}% "
-                    + $"regen={(int)s.ManaRegenMode}({s.ManaRegenMode}) maxrec={s.MaxRecoveryLevel} mincast={s.MinCastChancePercent}% "
-                    + $"revit7={(s.UseRevit7 ? 1 : 0)} s2m7={(s.UseS2M7 ? 1 : 0)} h2m7={(s.UseH2M7 ? 1 : 0)} fb6={(s.FallbackTo6OnUnknown7 ? 1 : 0)}. Takes effect next /nbuff.");
+                Say($"Options saved (0x{s.CharacterId:X8}): regen={(int)s.ManaRegenMode}({s.ManaRegenMode}) "
+                    + $"kits={(s.HealingKits != NB3.Core.HealingKitTiers.None ? 1 : 0)} potions={(s.UsePotions ? 1 : 0)} "
+                    + $"cannibalize={(s.UseHealthToMana ? 1 : 0)} manafloor={s.ManaFloorPercent}% manatarget={s.ManaRegenTargetPercent}% "
+                    + $"stampct={s.StaminaFloorPercent}% healthpct={s.HealthFloorPercent}% maxrec={s.MaxRecoveryLevel}.");
+                Say($"...aggr={s.ExpectedPctSpellCost}% skillcap={(s.SkillBasedLevel ? 1 : 0)} mincast={s.MinCastChancePercent}% "
+                    + $"recast={(s.RecastActiveBuffs ? 1 : 0)} rebuffmins={s.RebuffMinutesRemaining} autogen={(s.AutoGenerateOnLogin ? 1 : 0)}. Takes effect next /nbuff.");
+            }
+            catch (Exception ex) { LogException(ex); }
+        }
+
+        /// <summary>The "Rescan Character" button: rebuild THIS character's profile from its
+        /// CURRENT trained/specialized skills (the /nbgen path) and re-select it — so a character who
+        /// trains new skills over time can refresh the generated set in place, with no need to delete
+        /// the profile and relog. Overwrites the character-named profile.</summary>
+        [MVControlEvent("pbRescan", "Click")]
+        private void PbOptionsRescan(object sender, MVControlEventArgs e)
+        {
+            try
+            {
+                if (!LoggedIn()) { Say("log in first - Rescan reads your trained/specialized skills."); return; }
+                string charName = null;
+                try { charName = NB3.Core.Modern.ModernProfileStore.Canon(Decal.Adapter.CoreManager.Current.CharacterFilter.Name); }
+                catch { }
+                if (string.IsNullOrEmpty(charName))
+                { Say("couldn't read your character name for the rescan - use /nbgen <name> from chat instead."); return; }
+                Say($"Rescanning {charName}: rebuilding the profile from your current trained/specialized skills...");
+                GenerateProfile(charName);   // overwrites the character-named profile, re-selects it, echoes the result
             }
             catch (Exception ex) { LogException(ex); }
         }
@@ -146,42 +188,86 @@ namespace NB3.Plugin
         private bool ReadOptionsControls()
         {
             var s = _settings;
-            var kitP = CtlIn<ICheckBox>(OptionsTitle, "checkboxUsePlentiful");
-            var kitT = CtlIn<ICheckBox>(OptionsTitle, "checkboxUseTreated");
-            var kitE = CtlIn<ICheckBox>(OptionsTitle, "checkboxUsePeerless");
-            var rev7 = CtlIn<ICheckBox>(OptionsTitle, "checkboxUseRevit7");
-            var s2m7 = CtlIn<ICheckBox>(OptionsTitle, "checkboxUseS2M7");
-            var h2m7 = CtlIn<ICheckBox>(OptionsTitle, "checkboxUseH2M7");
-            var fb6 = CtlIn<ICheckBox>(OptionsTitle, "checkboxFallbackTo6");
+            var useKits = CtlIn<ICheckBox>(OptionsTitle, "checkboxUseKits");
+            var potions = CtlIn<ICheckBox>(OptionsTitle, "checkboxUsePotions");
+            var hp2m = CtlIn<ICheckBox>(OptionsTitle, "checkboxUseHealthToMana");
+            var skillCap = CtlIn<ICheckBox>(OptionsTitle, "checkboxSkillCap");
+            var recast = CtlIn<ICheckBox>(OptionsTitle, "checkboxRecast");
+            var autogen = CtlIn<ICheckBox>(OptionsTitle, "checkboxAutogen");
             var quiet = CtlIn<ICheckBox>(OptionsTitle, "checkboxQuietMode");
             var perma = CtlIn<ICheckBox>(OptionsTitle, "checkboxEditorPermaDelete");
             var ar = CtlIn<ITextBox>(OptionsTitle, "editAR");
+            var manaFloor = CtlIn<ITextBox>(OptionsTitle, "editManaFloor");
+            var manaTarget = CtlIn<ITextBox>(OptionsTitle, "editManaTarget");
+            var stamPct = CtlIn<ITextBox>(OptionsTitle, "editStamPct");
+            var healthPct = CtlIn<ITextBox>(OptionsTitle, "editHealthPct");
             var maxLvl = CtlIn<ITextBox>(OptionsTitle, "editMaxSpellLevel");
-            var minCast = CtlIn<ITextBox>(OptionsTitle, "editMinCast");        // optional (older XML lacks it)
-            var potions = CtlIn<ICheckBox>(OptionsTitle, "checkboxUsePotions"); // optional (older XML lacks it)
+            var minCast = CtlIn<ITextBox>(OptionsTitle, "editMinCast");
+            var rebuffMins = CtlIn<ITextBox>(OptionsTitle, "editRebuffMins");
             var mode = CtlIn<ICombo>(OptionsTitle, "choiceManaMode");
-            if (kitP == null || ar == null || maxLvl == null || mode == null) return false;
+            if (ar == null || maxLvl == null || mode == null) return false;
 
             try
             {
-                var kits = NB3.Core.HealingKitTiers.None;
-                if (kitP.Checked) kits |= NB3.Core.HealingKitTiers.Plentiful;
-                if (kitT != null && kitT.Checked) kits |= NB3.Core.HealingKitTiers.Treated;
-                if (kitE != null && kitE.Checked) kits |= NB3.Core.HealingKitTiers.Peerless;
-                s.HealingKits = kits;
-                if (rev7 != null) s.UseRevit7 = rev7.Checked;
-                if (s2m7 != null) s.UseS2M7 = s2m7.Checked;
-                if (h2m7 != null) s.UseH2M7 = h2m7.Checked;
-                if (fb6 != null) s.FallbackTo6OnUnknown7 = fb6.Checked;
+                // Kits: single on/off — ON stores the full tier set (the inventory scan picks the
+                // best kit carried), OFF stores none.
+                if (useKits != null)
+                    s.HealingKits = useKits.Checked
+                        ? (NB3.Core.HealingKitTiers.Plentiful | NB3.Core.HealingKitTiers.Treated | NB3.Core.HealingKitTiers.Peerless)
+                        : NB3.Core.HealingKitTiers.None;
+                if (potions != null) s.UsePotions = potions.Checked;
+                if (hp2m != null) s.UseHealthToMana = hp2m.Checked;
+                if (skillCap != null) s.SkillBasedLevel = skillCap.Checked;
+                if (recast != null) s.RecastActiveBuffs = recast.Checked;
+                if (autogen != null) s.AutoGenerateOnLogin = autogen.Checked;
                 if (quiet != null) s.QuietMode = quiet.Checked;
                 if (perma != null) s.EditorPermaDelete = perma.Checked;
-                if (potions != null) s.UsePotions = potions.Checked;
 
                 int n;
                 if (int.TryParse((ar.Text ?? "").Trim(), out n) && n >= 1 && n <= 400)
                     s.ExpectedPctSpellCost = n;
                 else
                     Say($"'{ar.Text}' isn't a valid % of Spell Cost (1-400) - keeping {s.ExpectedPctSpellCost}.");
+
+                // Mana floor / target are a linked pair: the floor must sit below the target, or 0
+                // disables the reserve (per-spell-cost gate only). Parse both, then commit together
+                // only if the relationship holds — mirrors the /nbset manafloor/manatarget cross-check.
+                int floorVal = s.ManaFloorPercent;
+                if (manaFloor != null)
+                {
+                    if (int.TryParse((manaFloor.Text ?? "").Trim(), out n) && n >= 0 && n <= 99)
+                        floorVal = n;
+                    else
+                        Say($"'{manaFloor.Text}' isn't a valid mana floor % (0-99) - keeping {s.ManaFloorPercent}.");
+                }
+                int targetVal = s.ManaRegenTargetPercent;
+                if (manaTarget != null)
+                {
+                    if (int.TryParse((manaTarget.Text ?? "").Trim(), out n) && n >= 1 && n <= 100)
+                        targetVal = n;
+                    else
+                        Say($"'{manaTarget.Text}' isn't a valid mana target % (1-100) - keeping {s.ManaRegenTargetPercent}.");
+                }
+                if (floorVal == 0 || floorVal < targetVal)
+                { s.ManaFloorPercent = floorVal; s.ManaRegenTargetPercent = targetVal; }
+                else
+                    Say($"mana floor ({floorVal}%) must be below target ({targetVal}%) - keeping floor={s.ManaFloorPercent}% target={s.ManaRegenTargetPercent}%.");
+
+                if (stamPct != null)
+                {
+                    if (int.TryParse((stamPct.Text ?? "").Trim(), out n) && n >= 1 && n <= 99)
+                        s.StaminaFloorPercent = n;
+                    else
+                        Say($"'{stamPct.Text}' isn't a valid stamina floor % (1-99) - keeping {s.StaminaFloorPercent}.");
+                }
+
+                if (healthPct != null)
+                {
+                    if (int.TryParse((healthPct.Text ?? "").Trim(), out n) && n >= 1 && n <= 99)
+                        s.HealthFloorPercent = n;
+                    else
+                        Say($"'{healthPct.Text}' isn't a valid health floor % (1-99) - keeping {s.HealthFloorPercent}.");
+                }
 
                 if (int.TryParse((maxLvl.Text ?? "").Trim(), out n) && n >= 1 && n <= 7)
                     s.MaxRecoveryLevel = n;
@@ -194,6 +280,14 @@ namespace NB3.Plugin
                         s.MinCastChancePercent = n;
                     else
                         Say($"'{minCast.Text}' isn't a valid min cast chance % (1-100) - keeping {s.MinCastChancePercent}.");
+                }
+
+                if (rebuffMins != null)
+                {
+                    if (int.TryParse((rebuffMins.Text ?? "").Trim(), out n) && n >= 0 && n <= 240)
+                        s.RebuffMinutesRemaining = n;
+                    else
+                        Say($"'{rebuffMins.Text}' isn't a valid rebuff window (0-240 min) - keeping {s.RebuffMinutesRemaining}.");
                 }
 
                 int m = mode.Selected;

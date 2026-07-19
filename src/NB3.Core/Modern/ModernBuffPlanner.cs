@@ -38,8 +38,11 @@ namespace NB3.Core.Modern
         /// success chance (ACE's fizzle model), not merely the highest known — a per-cast warning
         /// is emitted when a buff is skill-capped. Rebuff policy: decides whether an already-active
         /// buff is recast (force / expiring-within-window), so a re-run isn't silently empty just
-        /// because you're currently buffed.</summary>
-        public BuffPlan Plan(ModernProfile profile, IGameState state, SkillPolicy skill, RebuffPolicy rebuff)
+        /// because you're currently buffed. <paramref name="autoWieldCaster"/>: when the casting
+        /// hand is empty and there's something to cast, prepend an Equip that wields a wand/staff/orb
+        /// from the pack — you can't cast (or even enter the Magic stance) without one.</summary>
+        public BuffPlan Plan(ModernProfile profile, IGameState state, SkillPolicy skill, RebuffPolicy rebuff,
+                             bool autoWieldCaster = false)
         {
             var plan = new BuffPlan();
 
@@ -130,6 +133,26 @@ namespace NB3.Core.Modern
                     plan.SkippedAlreadyActive++;                 // resolvable, so it was skipped as active
                 else
                     plan.Unresolved.Add(nm);                     // no castable spell exists for it
+            }
+
+            // Auto-wield a caster (owner request): if the casting hand is empty, wield a wand/staff/orb
+            // from the pack so the casts above can land — you can't enter the Magic stance, let alone
+            // cast, without one. Only when there IS something to cast (no point wielding to do nothing),
+            // and never a duplicate of a caster the profile's own equips already arrange. Prepended so
+            // it runs first, ahead of the profile equips and every cast.
+            if (autoWieldCaster && state.WieldedCasterId == 0 && plan.Actions.Any(a => a.Kind != CastKind.Equip))
+            {
+                int caster = state.FindWieldableCaster();
+                if (caster != 0 && !plan.Actions.Any(a => a.Kind == CastKind.Equip && a.TargetGuid == caster))
+                    plan.Actions.Insert(0, new CastAction
+                    {
+                        Kind = CastKind.Equip, TargetGuid = caster, Description = "Wield caster (auto)"
+                    });
+                else if (caster == 0)
+                    plan.Warnings.Add(new PlanWarning
+                    {
+                        Message = "No caster wielded and none in your pack - casts may fizzle. Wield a wand/staff/orb."
+                    });
             }
             return plan;
         }

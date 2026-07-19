@@ -24,7 +24,7 @@ namespace NB3.Plugin
         private const string CastingTitle = "NB3 Spells";
 
         /// <summary>XML-default geometry per view (doc 03 §10.14: /nbreset's known-good state).</summary>
-        private static readonly System.Drawing.Rectangle OptionsHome = new System.Drawing.Rectangle(75, 50, 270, 271);
+        private static readonly System.Drawing.Rectangle OptionsHome = new System.Drawing.Rectangle(75, 50, 270, 410);
         private static readonly System.Drawing.Rectangle EditorHome = new System.Drawing.Rectangle(5, 25, 650, 402);
         private static readonly System.Drawing.Rectangle CastingHome = new System.Drawing.Rectangle(5, 25, 380, 409);
 
