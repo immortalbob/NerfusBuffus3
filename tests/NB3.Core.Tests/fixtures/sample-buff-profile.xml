@@ -1,0 +1,42 @@
+<?xml version="1.0" ?>
+<Profile version="0.1.0.0" name="Sample Buff">
+  <Equip nodetype="Equip" itemname="Focusing Stone" equipby="name" />
+  <Spell nodetype="Spell" spellid="0x022E" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x028F" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x058F" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x05A7" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0247" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x025F" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0277" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0114" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x01D5" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0531" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0560" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0547" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x051C" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x03FC" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x046D" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0457" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0442" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0205" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x0036" targettype="self" />
+  <Spell nodetype="Spell" spellid="0x00A6" targettype="self" />
+  <Spellgroup nodetype="Spellgroup" targetcover="0x00007F21" targettype="cover" >
+    <Spell nodetype="Spell" spellid="0x05CA" />
+    <Spell nodetype="Spell" spellid="0x05E8" />
+  </Spellgroup>
+  <Spellgroup nodetype="Spellgroup" targetcover="0x000000DE" targettype="cover" >
+    <Spell nodetype="Spell" spellid="0x05CA" />
+    <Spell nodetype="Spell" spellid="0x05E8" />
+    <Spell nodetype="Spell" spellid="0x0616" />
+    <Spell nodetype="Spell" spellid="0x0622" />
+    <Spell nodetype="Spell" spellid="0x060C" />
+    <Spell nodetype="Spell" spellid="0x05F4" />
+    <Spell nodetype="Spell" spellid="0x05D6" />
+    <Spell nodetype="Spell" spellid="0x0600" />
+  </Spellgroup>
+  <Spellgroup nodetype="Spellgroup" targetcover="0x00100000" targettype="cover" >
+    <Spell nodetype="Spell" spellid="0x064D" />
+    <Spell nodetype="Spell" spellid="0x0635" />
+  </Spellgroup>
+</Profile>

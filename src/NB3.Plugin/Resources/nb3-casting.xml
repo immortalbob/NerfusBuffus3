@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<view icon="5000" title="NB3 Spells" left="5" top="25" width="380" height="409">
+	<control progid="DecalControls.FixedLayout">
+		<control progid="DecalControls.List" ID="5000" name="listSpellsToCast" left="5" top="1" width="370" height="350">
+			<column progid="DecalControls.TextColumn" fixedwidth="18" />
+			<column progid="DecalControls.TextColumn" />
+		</control>
+		<control progid="DecalControls.PushButton" ID="5001" name="pbCastDismiss" left="5" top="354" width="105" height="20" text="Dismiss" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="5002" name="pbCastPause" left="160" top="354" width="105" height="20" text="Pause" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="5003" name="pbCastResume" left="270" top="354" width="105" height="20" text="Resume" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+	</control>
+</view>

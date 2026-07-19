@@ -1,0 +1,29 @@
+Windows Registry Editor Version 5.00
+
+; Nerfus Buffus III (revival) — managed Decal 3 registration.
+; A FRESH, REAL GUID (matches the [Guid] on NB3.Plugin.PluginCore) — never the original
+; native CLSID {C050FED0-...}, so a stale native registration can't fight it (doc 08/12).
+; On 64-bit Windows this lands under WOW6432Node because the client is 32-bit. If Decal
+; doesn't show the plugin, confirm the hive by finding where VVS's own plugin key lives
+; and match it (doc 09 §4.2 — don't guess the hive).
+;
+; The two paths below are PRE-FILLED for the standard layout:
+;     C:\Games\DecalPlugins\NerfusBuffus3\   (repo root; build-windows.ps1 stages DLLs to .\dist)
+; If you extracted elsewhere, edit both "Assembly" and "Path" to your own .\dist folder
+; (use DOUBLE backslashes, as shown).
+;
+; BEFORE importing this file:
+;   1. Register the assembly with the 32-BIT RegAsm — Framework\, NEVER Framework64\
+;      (doc 12 §4; the 64-bit RegAsm writes where the 32-bit client can't see it):
+;        C:\Windows\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe /codebase NerfusBuffus3.dll
+;      from an Administrator prompt, in the DLL's folder.
+;   2. Import this file (double-click), OR just run register-windows.ps1 as Administrator —
+;      it does the RegAsm step AND writes this key for you, with paths computed at runtime.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Decal\Plugins\{915ED3D0-26CD-493D-80E8-34A3099FF511}]
+@="Nerfus Buffus III"
+"Object"="NB3.Plugin.PluginCore"
+"Assembly"="C:\\Games\\DecalPlugins\\NerfusBuffus3\\dist\\NerfusBuffus3.dll"
+"Path"="C:\\Games\\DecalPlugins\\NerfusBuffus3\\dist"
+"Surrogate"="{71A69713-6593-47EC-0002-0000000DECA1}"
+"Enabled"=dword:00000001

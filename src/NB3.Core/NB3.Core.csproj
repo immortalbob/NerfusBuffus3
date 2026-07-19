@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The core is pure BCL (System.Xml.Linq + collections), so it is framework-agnostic.
+       It SHIPS as netstandard2.0 (drops straight into the net48 Decal plugin). For the
+       offline doc-15 gate we build it as net8.0 by passing -p:CoreTfm=net8.0, which needs
+       no NuGet (only SDK-bundled ref packs). Same source, both frameworks. -->
+  <PropertyGroup>
+    <CoreTfm Condition="'$(CoreTfm)' == ''">netstandard2.0</CoreTfm>
+    <TargetFramework>$(CoreTfm)</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>NB3.Core</AssemblyName>
+    <RootNamespace>NB3.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

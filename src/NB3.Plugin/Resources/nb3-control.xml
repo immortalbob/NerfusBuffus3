@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<view icon="5000" title="NB3" left="75" top="50" width="200" height="219">
+	<control progid="DecalControls.FixedLayout">
+		<control progid="DecalControls.StaticText" left="5" top="1" width="55" height="18" text="Current:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticCurrentConfig" left="60" top="1" width="105" height="18" text="(none loaded)" fontface="Arial" fontsize="14" textcolor="128" />
+		<control progid="DecalControls.Choice" ID="3001" name="choiceLoadConfig" left="4" top="19" width="192" height="18" droplines="6" selected="0">
+			<option data="(select)" text="(Select a configuration to load)" />
+		</control>
+		<control progid="DecalControls.StaticText" left="2" top="40" width="48" height="18" text="Status:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticStatus" left="50" top="40" width="148" height="18" text="Idle" fontface="Arial" fontsize="14" textcolor="128" />
+
+		<control progid="DecalControls.StaticText" left="2" top="60" width="48" height="18" text="Spells:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticSpellsCount" left="50" top="60" width="20" height="18" text="0" fontface="Arial" fontsize="14" textcolor="128" />
+		<control progid="DecalControls.StaticText" left="70" top="60" width="38" height="18" text="Left:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticSpellsLeft" left="108" top="60" width="20" height="18" text="0" fontface="Arial" fontsize="14" textcolor="128" />
+		<control progid="DecalControls.StaticText" left="128" top="60" width="36" height="18" text="Time:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticTimer" left="165" top="60" width="34" height="18" text="0:00" fontface="Arial" fontsize="14" textcolor="128" />
+
+		<control progid="DecalControls.StaticText" left="2" top="78" width="46" height="18" text="Fizz:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticFizzle" left="50" top="78" width="20" height="18" text="0" fontface="Arial" fontsize="14" textcolor="128" />
+		<control progid="DecalControls.StaticText" left="70" top="78" width="38" height="18" text="Busy:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticBusy" left="108" top="78" width="20" height="18" text="0" fontface="Arial" fontsize="14" textcolor="128" />
+		<control progid="DecalControls.StaticText" left="128" top="78" width="36" height="18" text="Mana:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticMana" left="165" top="78" width="20" height="18" text="0" fontface="Arial" fontsize="14" textcolor="128" />
+
+		<control progid="DecalControls.StaticText" left="2" top="96" width="46" height="18" text="Cast:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.StaticText" name="staticCasting" left="50" top="96" width="148" height="18" text="nothing" fontface="Arial" fontsize="14" textcolor="128" />
+
+		<control progid="DecalControls.PushButton" ID="4001" name="pbStart" left="3" top="114" width="194" height="20" text="START" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4002" name="pbPause" left="3" top="136" width="62" height="20" text="Pause" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4003" name="pbResume" left="69" top="136" width="62" height="20" text="Resume" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4004" name="pbAbort" left="135" top="136" width="62" height="20" text="Abort" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+
+		<control progid="DecalControls.PushButton" left="0" top="159" width="200" height="2" text="-" />
+
+		<control progid="DecalControls.PushButton" ID="4005" name="pbEditor" left="3" top="164" width="95" height="20" text="Editor" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4006" name="pbOptions" left="102" top="164" width="95" height="20" text="Options" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+	</control>
+</view>

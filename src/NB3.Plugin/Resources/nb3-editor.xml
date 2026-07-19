@@ -1,0 +1,208 @@
+<?xml version="1.0"?>
+<view icon="5000" title="NB3 Editor" left="5" top="25" width="650" height="402">
+	<control progid="DecalControls.FixedLayout">
+
+		<control progid="DecalControls.StaticText" text="Profile to edit:" left="5" top="1" width="124" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold"/>
+		<control progid="DecalControls.Choice" ID="3003" name="choiceGroup" left="131" top="0" width="240" height="18" droplines="8" selected="0">
+			<option data="(select)" text="(Select a profile to edit)" />
+		</control>
+		<control progid="DecalControls.StaticText" text="New profile name:" left="5" top="23" width="114" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold"/>
+		<control progid="DecalControls.Edit" ID="5001" name="editNewGroupName" left="122" top="22" width="143" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal"/>
+		<control progid="DecalControls.PushButton" ID="4303" name="pbNewGroup" left="270" top="21" width="100" height="20" text="New Profile" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+
+		<control progid="DecalControls.PushButton" ID="4310" name="pbClearGroup" left="5" top="42" width="119" height="20" text="Clear Profile" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4309" name="pbResetGroup" left="128" top="42" width="119" height="20" text="Revert Profile" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4320" name="pbDuplicate" left="251" top="42" width="119" height="20" text="Copy Profile" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+
+		<control progid="DecalControls.PushButton" left="5" top="66" width="365" height="2" text="-" />
+		<control progid="DecalControls.List" ID="2001" name="listSpellsInGroup" left="5" top="70" width="365" height="270">
+			<column progid="DecalControls.TextColumn" fixedwidth="18" />
+			<column progid="DecalControls.TextColumn" fixedwidth="18" />
+			<column progid="DecalControls.TextColumn" fixedwidth="18" />
+			<column progid="DecalControls.TextColumn" />
+		</control>
+
+		<control progid="DecalControls.StaticText" left="375" top="0" width="220" height="18" text="Select spells to add:" fontface="Arial" fontsize="15" textcolor="0" fontstyle="bold" />
+		<control progid="DecalControls.Notebook" left="375" top="19" width="270" height="321" fontface="Arial" fontsize="12">
+<!-- Creature Spells (Self) -->
+			<page label="Creature(S)">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<control progid="DecalControls.List" ID="2003" name="listCreatureSelf" left="0" top="4" width="270" height="288">
+						<column progid="DecalControls.TextColumn" fixedwidth="18" />
+						<column progid="DecalControls.TextColumn" />
+					</control>
+				</control>
+			</page>
+<!-- Creature Spells (Others) -->
+			<page label="(O)">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<!-- Named -->
+					<control progid="DecalControls.Checkbox" name="cbCreatureOtherTargetNamed" ID="6304" left="3"  top="4"  width="72" height="16" text="By Name:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit" name="editCreatureOtherName" text="(enter target player's name)" top="3" left="80" width="170" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton" name="pbCreatureOtherWizNamed" ID="4307" left="253" top="3" width="17" height="18" text="?" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- By GUID -->
+					<control progid="DecalControls.Checkbox" name="cbCreatureOtherTargetGUID" ID="6305" left="3"  top="23"  width="72" height="16" text="By GUID:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit" name="editCreatureOtherGUID" text="0x00000000" top="22" left="80" width="90" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton" name="pbCreatureOtherWizGUID" ID="4308" left="253" top="22" width="17" height="18" text="?" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- Current Target -->
+					<control progid="DecalControls.Checkbox" name="cbCreatureOtherTargetCurrent" ID="6306" left="3" top="42"  width="265" height="16" text="Your Current Target (when you start)" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<!-- Spell List -->
+					<control progid="DecalControls.PushButton" left="0" top="60" width="270" height="2" text="-" />
+					<control progid="DecalControls.List" ID="2006" name="listCreatureOther" left="0" top="64" width="270" height="228">
+						<column progid="DecalControls.TextColumn" fixedwidth="18" />
+						<column progid="DecalControls.TextColumn" />
+					</control>
+				</control>
+			</page>
+<!-- Life Spells (Self) -->
+			<page label="Life(S)">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<control progid="DecalControls.List" ID="2005" name="listLifeSelf" left="0" top="4" width="270" height="288">
+						<column progid="DecalControls.TextColumn" fixedwidth="18" />
+						<column progid="DecalControls.TextColumn" />
+					</control>
+				</control>
+			</page>
+<!-- Life Spells (Others) -->
+			<page label="(O)">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<!-- Named -->
+					<control progid="DecalControls.Checkbox" ID="6301" left="3"  top="4"  width="72" height="16" name="cbLifeOtherTargetNamed" text="By Name:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit" name="editLifeOtherName" text="(enter target player's name)" top="3" left="80" width="170" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton" ID="4305" name="pbLifeOtherWizNamed" left="253" top="3" width="17" height="18" text="?" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- By GUID -->
+					<control progid="DecalControls.Checkbox" ID="6302" left="3"  top="23"  width="72" height="16" name="cbLifeOtherTargetGUID" text="By GUID:" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit" name="editLifeOtherGUID" text="0x00000000" top="22" left="80" width="90" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton" ID="4306" name="pbLifeOtherWizGUID" left="253" top="22" width="17" height="18" text="?" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- Current Target -->
+					<control progid="DecalControls.Checkbox" ID="6303" left="3"  top="42"  width="265" height="16" name="cbLifeOtherTargetCurrent" text="Your Current Target (when you start)" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<!-- Spell List -->
+					<control progid="DecalControls.PushButton" left="0" top="60" width="270" height="2" text="-" />
+					<control progid="DecalControls.List" ID="2007" name="listLifeOther" left="0" top="64" width="270" height="228">
+						<column progid="DecalControls.TextColumn" fixedwidth="18" />
+						<column progid="DecalControls.TextColumn" />
+					</control>
+				</control>
+			</page>
+<!-- Item Spells -->
+			<page label="Item">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<!-- Named -->
+					<control progid="DecalControls.Checkbox"	ID="6307"	name="cbItemTargetNamed"	text="By Name:" left="3"  top="4"  width="72" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit"					name="editItemName"			text="(enter target item's name)" top="3" left="80" width="170" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton"	ID="4311"	name="pbItemWizNamed"	    text="?" left="253" top="3" width="17" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- By GUID -->
+					<control progid="DecalControls.Checkbox"	ID="6308"   name="cbItemTargetGUID"		text="By GUID:" left="3" top="23"  width="72" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit"					name="editItemGUID"			text="0x00000000" top="22" left="80" width="90" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton"	ID="4312"	name="pbItemWizGUID"	    text="?" left="253" top="22" width="17" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- Current Target (shield, weapon) -->
+					<control progid="DecalControls.Checkbox"	ID="6309"	name="cbItemTargetCurrent"	text="Target" left="3" top="42"  width="87" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Checkbox"	ID="6311"	name="cbItemTargetWeapon"	text="Weapon" left="90" top="42"  width="87" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Checkbox"	ID="6310"	name="cbItemTargetShield"	text="Shield" left="180" top="42"  width="87" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					
+					<!-- Cover Mask -->
+					<control progid="DecalControls.Checkbox"	ID="6312"	name="cbItemTargetCover"	text="Cover" left="3" top="61"  width="87" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.PushButton" left="55" top="69" width="215" height="2" text="-" />
+					<control progid="DecalControls.Checkbox" name="cbICoverCoat"	text="Coat"		left="3"	top="76"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverLegs"	text="Legs"		left="68"	top="76"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverGirth"	text="Girth"	left="133"	top="76"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverHands"	text="Hands"	left="198"	top="76"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverHead"	text="Head"		left="3"	top="92"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverFeet"	text="Feet"		left="68"	top="92"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverPants"	text="Pants"	left="133"	top="92"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverShirt"	text="Shirt"	left="198"	top="92"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverWeapon"	text="Weapon"	left="3"	top="108"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverShield"	text="Shield"	left="68"	top="108"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbICoverWand"	text="Casting Tool" left="133" top="108" width="120" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.PushButton" left="0" top="123" width="270" height="2" text="-" />
+					<control progid="DecalControls.List" ID="2004" name="listItem" left="0" top="125" width="270" height="140">
+						<column progid="DecalControls.TextColumn" fixedwidth="18" />
+						<column progid="DecalControls.TextColumn" />
+					</control>
+					<control progid="DecalControls.PushButton" left="0" top="267" width="270" height="2" text="-" />
+					<control progid="DecalControls.PushButton" ID="4313" name="pbItemAddSpells" text="Add Spells" left="170" top="270" width="100" height="20" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+				</control>
+			</page>
+<!-- Equipment Changes -->
+			<page label="Equip">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<control progid="DecalControls.StaticText" text="Equip an item by:" left="3" top="3" width="260" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold"/>
+					<!-- Name -->
+					<control progid="DecalControls.Checkbox"	ID="6313"	name="cbEqNamed"		text="By Name:" left="3"  top="18"  width="72" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit"					name="editEqName"		text="(enter item's name)" top="17" left="80" width="170" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton"	ID="4314"	name="pbEqWizNamed"		text="?" left="253" top="17" width="17" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- By GUID -->
+					<control progid="DecalControls.Checkbox"	ID="6314"   name="cbEqGUID"			text="By GUID:" left="3" top="37"  width="72" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit"					name="editEqGUID"		text="0x00000000" top="36" left="80" width="90" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton"	ID="4315"	name="pbEqWizGUID"		text="?" left="253" top="36" width="17" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- Add Equip -->
+					<control progid="DecalControls.PushButton"	ID="4316"	name="pbEqAdd"			text="Equip Item" left="170" top="55" width="100" height="20" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					
+					<control progid="DecalControls.PushButton" left="0" top="84" width="270" height="2" text="-" />
+
+					<!-- Unequips -->
+					<control progid="DecalControls.StaticText" text="Unequip an item by:" left="3" top="94" width="260" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold"/>
+					<!-- Name -->
+					<control progid="DecalControls.Checkbox"	ID="6315"	name="cbUnEqNamed"		text="By Name:" left="3"  top="111"  width="72" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit"					name="editUnEqName"		text="(enter item's name)" top="110" left="80" width="170" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton"	ID="4317"	name="pbUnEqWizNamed"	text="?" left="253" top="110" width="17" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- By GUID -->
+					<control progid="DecalControls.Checkbox"	ID="6316"   name="cbUnEqGUID"		text="By GUID:" left="3" top="130"  width="72" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.Edit"					name="editUnEqGUID"		text="0x00000000" top="129" left="80" width="90" height="18" marginx="5" marginy="1" imagebrushsrc="1067120" fontface="Arial" fontsize="14" textcolor="10079487" fontstyle="normal" />
+					<control progid="DecalControls.PushButton"	ID="4318"	name="pbUnEqWizGUID"    text="?" left="253" top="129" width="17" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+					<!-- Cover Mask -->
+					<control progid="DecalControls.Checkbox"	ID="6317"	name="cbUnEqCover"		text="Cover" left="3" top="149"  width="87" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold" />
+					<control progid="DecalControls.PushButton" left="55" top="157" width="215" height="2" text="-" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverCoat"		text="Coat"		left="3"	top="164"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverLegs"		text="Legs"		left="68"	top="164"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverGirth"	text="Girth"	left="133"	top="164"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverHands"	text="Hands"	left="198"	top="164"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverHead"		text="Head"		left="3"	top="180"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverFeet"		text="Feet"		left="68"	top="180"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverPants"	text="Pants"	left="133"	top="180"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverShirt"	text="Shirt"	left="198"	top="180"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverLRing"	text="Ring(L)"	left="3"	top="196"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverRRing"	text="Ring(R)"	left="68"	top="196"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverLBrac"	text="Brac(L)"	left="133"	top="196"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverRBrac"	text="Brac(R)"	left="198"	top="196"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverNeck"		text="Neck"		left="3"	top="212"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverWeapon"	text="Weapon"	left="68"	top="212"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<control progid="DecalControls.Checkbox" name="cbUnEqCoverShield"	text="Shield"	left="133"	top="212"	width="65" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal" />
+					<!-- Add UnEquip -->
+					<control progid="DecalControls.PushButton"	ID="4319"	name="pbUnEqAdd"		text="Unequip Item(s)" left="160" top="227" width="110" height="20" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+
+					<!-- Restore Equipment -->
+					<control progid="DecalControls.PushButton" left="0" top="256" width="270" height="2" text="-" />
+					<control progid="DecalControls.StaticText" text="Restore Starting Equipment" left="3" top="266" width="260" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="bold"/>
+					<control progid="DecalControls.PushButton"	ID="4323"	name="pbRestoreAdd"		text="Restore Items" left="170" top="263" width="100" height="20" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+
+				</control>
+			</page>
+<!-- Extras -->
+			<page label="Extras">
+				<control progid="DecalControls.FixedLayout">
+					<control progid="DecalControls.PushButton" left="0" top="0" width="270" height="2" text="-" />
+					<control progid="DecalControls.StaticText" left="3" top="3"  text="To include one profile in another" width="264" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal"/>
+					<control progid="DecalControls.StaticText" left="3" top="20" text="while the editor is open, type" width="264" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal"/>
+					<control progid="DecalControls.StaticText" left="3" top="37" text="'/nbinclude ProfileName.xml' at the" width="264" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal"/>
+					<control progid="DecalControls.StaticText" left="3" top="54" text="chat prompt, or select from the" width="264" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal"/>
+					<control progid="DecalControls.StaticText" left="3" top="71" text="list below:" width="264" height="16" fontface="Arial" fontsize="14" textcolor="0" fontstyle="normal"/>
+					<control progid="DecalControls.Choice" ID="4321" name="choiceInclude" left="3" top="91" width="149" height="18" droplines="8" selected="0">
+						<option text="(Select a profile to include)" />
+					</control>
+					<control progid="DecalControls.PushButton" ID="4322" name="pbAddInclude" text="Add Include" left="155" top="91" width="105" height="18" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+				</control>
+			</page>
+		</control>
+		<control progid="DecalControls.PushButton" left="5" top="342" width="640" height="2" text="-" />
+		<control progid="DecalControls.PushButton" ID="4302" name="pbEdDismiss" left="5" top="347" width="105" height="20" text="Dismiss" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4304" name="pbDeleteGroup" left="430" top="347" width="105" height="20" text="Delete" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+		<control progid="DecalControls.PushButton" ID="4301" name="pbSaveGroup" left="540" top="347" width="105" height="20" text="Save" fontface="Arial" fontsize="15" textcolor="10079487" fontstyle="bold" />
+	</control>
+</view>

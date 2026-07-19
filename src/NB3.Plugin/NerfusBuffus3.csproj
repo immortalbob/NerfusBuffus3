@@ -1,0 +1,87 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Decal 3 shell. Builds on Windows (net48/x86/ComVisible) against the Decal + VVS
+       reference assemblies. Does NOT build in the Linux sandbox (no net48 pack / no Decal
+       refs) — that's expected; the *logic* is proven in NB3.Core.Tests and the glue is
+       type-checked offline by the doc-15 shim gate (tools/shimcheck). -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ComVisible>true</ComVisible>
+    <EnableComHosting>false</EnableComHosting>
+    <AssemblyName>NerfusBuffus3</AssemblyName>
+    <RootNamespace>NB3.Plugin</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>3.0.9</Version> <!-- bump on rebuilds so a stale in-client DLL is detectable (doc 12 §6) -->
+
+    <!-- MANDATORY (doc 10 §2 / doc 12 §3): compile the VVS backend of the vendored
+         MetaViewWrappers, or ViewSystemSelector returns a null view and the plugin loads
+         with an invisible, dead UI — no error, no window. -->
+    <DefineConstants>$(DefineConstants);VVS_REFERENCED</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Build the plugin with -p:CoreTfm=net48 so the referenced core compiles as net48 (its
+       real runtime target — Decal loads it in-process into the net48 client). The core's
+       default TFM is netstandard2.0, which needs the NETStandard.Library metapackage from a
+       NuGet feed; nuget.config <clear/>s all sources for the offline gates, so an ns2.0
+       restore dies with NU1100 even on an internet-connected box. net48 resolves from the
+       on-disk .NET Framework 4.8 developer pack (no feed). The build guide / build-windows.ps1
+       pass -p:CoreTfm=net48; the tests pass -p:CoreTfm=net8.0; the ns2.0 ship build stays
+       available via -p:CoreTfm=netstandard2.0 on a feed-connected machine. -->
+  <ItemGroup>
+    <ProjectReference Include="..\NB3.Core\NB3.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Recovered UI + data + sound, shipped as embedded resources (doc 08 §3.5, §6.2).
+       spellcat-2012.tsv is the doc-16 §7.5 runtime FALLBACK: the live FileService.SpellTable
+       is authoritative; the dump fills any field the SDK build's Spell record won't surface. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\nb3-control.xml" />
+    <EmbeddedResource Include="Resources\nb3-charconfig.xml" />
+    <EmbeddedResource Include="Resources\nb3-editor.xml" />
+    <EmbeddedResource Include="Resources\nb3-casting.xml" />
+    <EmbeddedResource Include="Resources\nb3-spells.xml" />
+    <EmbeddedResource Include="Resources\nb3-notify.wav" />
+    <EmbeddedResource Include="Resources\spellcat-2012.tsv" />
+    <EmbeddedResource Include="Resources\spell-table-eor.tsv" />
+  </ItemGroup>
+
+  <!-- Decal / VVS references (doc 12 §2). Paths are per-machine; override on the command line:
+         dotnet build -c Release /p:Platform=x86 /p:DecalSdk="C:\Program Files (x86)\Decal 3.0" ^
+                       /p:VvsSdk="C:\Games\VirindiPlugins\VirindiViewService"
+       VirindiViewService is NOT in the Decal folder — it lives in VVS's own plugin folder.
+       Private=false on all three: Decal loads them in-process; never copy them to output. -->
+  <PropertyGroup>
+    <DecalSdk Condition="'$(DecalSdk)' == ''">C:\Games\Decal 3.0</DecalSdk>
+    <VvsSdk Condition="'$(VvsSdk)' == ''">C:\Games\VirindiPlugins\VirindiViewService</VvsSdk>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Decal.Adapter">
+      <HintPath>$(DecalSdk)\Decal.Adapter.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Decal.FileService">
+      <HintPath>$(DecalSdk)\Decal.FileService.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VirindiViewService">
+      <HintPath>$(VvsSdk)\VirindiViewService.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Framework assemblies the shell + vendored wrappers need (doc 12 §3):
+         WinForms for the cycle timer, Drawing for the wrapper's Point/Rectangle/Color. -->
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <!-- NOTE: the vendored VirindiViews\*.cs wrapper files are auto-globbed by the SDK.
+       Do NOT add an explicit <Compile Include> for them — that duplicates every file
+       (error NETSDK1022, doc 12 §3). -->
+
+</Project>
